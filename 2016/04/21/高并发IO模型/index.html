@@ -1,0 +1,270 @@
+<!DOCTYPE html><html lang="zh-cn"><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> 高并发I/O模型 · Mi Tang</title><meta name="description" content="高并发I/O模型 - fish·nut"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="short icon" href="/favicon.png"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="http://lpbobo.com/atom.xml" title="Mi Tang"></head><body><header><a href="/" class="logo-link"><img src="/favicon.png"></a><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">HOME</a></li><li class="nav-list-item"><a href="/categories/Science" target="_self" class="nav-list-link">SCIENCE</a></li><li class="nav-list-item"><a href="/categories/Trip" target="_self" class="nav-list-link">TRIP</a></li><li class="nav-list-item"><a href="/About" target="_self" class="nav-list-link">WE</a></li></ul></header><div class="wrap"><section class="container"><div class="post"><article class="post-block"><h1 class="post-title">高并发I/O模型</h1><div class="post-info">2016年4月21日</div><div class="post-content"><p>听起来很高端的高并发，需要操作系统和应用程序的完美配合。</p>
+<p>在网络文章中经常能够看到一些架构师常提“高并发”、“高可用”这样的描述，看到“NIO”、“epoll”、“select/poll”这样的缩写，总会有疑问，什么才是高并发？为什么要高并发？怎么高并发？高并发很难么？</p>
+<a id="more"></a>
+<p>总的来说，深入理解高并发服务端程序的构建确实很难，需要了解网路、操作系统、webserver、web application、web架构等等，而且需要与实际的业务需求相结合,认真处理每一环节才能构建一个性能优越的web系统，这个过程中涉及到到的编程知识都很基础，但是组合在一起就是个考验。</p>
+<p>尽管平时没有涉及到，但是了解相关知识对我们的编码能力绝对有提高,遇到有人装X的时候也可以直接打脸。我们就从一些基础的知识聊起，谈一谈服务端程序中的并发，希望大家能够掌握以下几点知识：</p>
+<ul>
+<li>linux下NIO、BIO、select/poll/epoll、AIO模型</li>
+<li>事件驱动式编程</li>
+<li>根据不同I/O模型及应用场景构建并发web服务</li>
+<li>IO性能瓶颈分析</li>
+</ul>
+<h3 id="基础概念"><a href="#基础概念" class="headerlink" title="基础概念"></a>基础概念</h3><p><em>同步 VS 异步</em></p>
+<blockquote>
+<p>从用户的角度来看，调用一个操作，一直等待操作执行完成返回结果，那么这个操作就是同步的</p>
+<p>从用户的角度来看，调用一个操作，操作直接返回一个调用结果，等待任务执行完成后，再通知用户，那么这个操作就是异步的</p>
+<p><strong>同步与异步关注的是消息通知机制</strong>，举个通俗栗子：同事出差，可以选择自己去网站购买机票，一步一步选择直至交易成功，也可以打电话给前台，让前台帮订票，订票成功后，前台会短息或者电话通知。这个过程中，自己买票就是同步的，委托前台就是异步的。</p>
+</blockquote>
+<p><em>阻塞 VS 非阻塞</em></p>
+<blockquote>
+<p>阻塞是指调用结果返回之前，线程会被挂起</p>
+<p>非阻塞是指不能立刻得到结果之前，线程不会被挂起</p>
+<p><strong>阻塞与非阻塞关注的是程序等待时的状态</strong>。依照上面的例子，我在等待前台通知的过程中，可以做其他工作，这个状态是非阻塞的，也可以一直等待，这个状态是阻塞的。</p>
+</blockquote>
+<p><em>线程 VS 进程</em></p>
+<blockquote>
+<p>进程是程序在处理器上的一次执行过程，是拥有资源的独立单位。线程是进程内的一个可调度实体，是调度和分配的基本单位，线程自己只拥有少量资源，但与进程内的其他线程共享进程拥有的全部资源。</p>
+<p>多线程是指一个进程中拥有多个线程，这些线程驻留在同一地址空间，并且可以访问相同数据。</p>
+<p>在操作系统中引入进程的目的是使多道程序能并发执行，以改善资源利用率及提高系统吞吐量，再引入线程，则是为了减少程序并发执行所付出的时空开销，使操作系统具有更好的并发性。</p>
+<p>现代服务器一般是多核CPU配置（大多数是linux），提高程序的并发性更多需要考虑核心切换开销（数据在内核态与用户态间的拷贝），由于进程的内存空间独立，切换时不需要考虑上下文，而线程的内存空间需要共享，共享资源需要在核心间拷贝，多核下多线程的性能不如多进程。但是在单核上，进程切换的开销还是要远远大于线程切换的开销的。</p>
+<p>多线程共享内存是一个优势，当任务需要大量的共享数据或者频繁通信时，建议使用多线程，其他情况，尽量使用多进程。</p>
+</blockquote>
+<p><em>并发 VS 高并发</em></p>
+<blockquote>
+<p>并发(concurrency)：并发是程序的一种执行属性，可以同时执行一个或多个任务。</p>
+<p>在一个并发的环境中，刨除外界环境因素，资源读取的开销是固定的，而如何同时更有效地利用其他计算资源是提高并发能力的关键。高并发一般是在电商系统中被提及的，由于各种秒杀活动的兴起，高并发成为一个web后台服务必备性能。web服务的高并发性能指标可以通过QPS（Query per second）来衡量，QPS指每秒处理请求数，可用（并发数/一般响应时间）来计算。</p>
+</blockquote>
+<h3 id="linux-I-O模型"><a href="#linux-I-O模型" class="headerlink" title="linux I/O模型"></a>linux I/O模型</h3><p>一个基本的网络I/O过程涉及到应用进程以及linux内核两个对象，分为两个阶段：</p>
+<ol>
+<li>数据准备：通常涉及等待数据从网络中到达。当所等待分组到达时，它被复制到内核中的某个缓冲区</li>
+<li>数据拷贝：把数据从内核缓冲区复制到应用进程缓冲区</li>
+</ol>
+<p>在linux中，根据两个阶段的处理不同，可以划分为以下五种IO模型:</p>
+<ol>
+<li>阻塞式I/O（blocking I/O）</li>
+<li>非阻塞式I/O（nonblocking I/O）</li>
+<li>多路复用I/O（I/O multiplexing）</li>
+<li>信号驱动式I/O（signal-driven I/O）</li>
+<li>异步I/O（asynchronous I/O）</li>
+</ol>
+<blockquote>
+<p>阻塞式I/O：进程调用recvfrom，直到数据包到达且被复制到应用程序的缓冲区或发生错误才返回。最常见的错误是系统调用信号被中断。我们称进程在从调用recvfrom开始到返回的整段时间内是阻塞的。</p>
+</blockquote>
+<p><img src="http://hi.csdn.net/attachment/201007/31/0_1280550787I2K8.gif" alt=""></p>
+<blockquote>
+<p>非阻塞式I/O：进程轮询数据准备的状态，如果没准备好，则立即返回错误，如果准备好并且拷贝完成，则返回成功。</p>
+</blockquote>
+<p><img src="http://hi.csdn.net/attachment/201007/31/0_128055089469yL.gif" alt=""></p>
+<blockquote>
+<p>多路复用I/O：select/poll/epoll模型，进程调用select/poll，阻塞等待套接字变为可读。当select返回套接字可读这一条件时，进程调用recvfrom把所读数据复制到应用进程缓冲区。</p>
+</blockquote>
+<p><img src="http://hi.csdn.net/attachment/201007/31/0_1280551028YEeQ.gif" alt=""></p>
+<blockquote>
+<p>信号驱动式I/O：进程向系统注册感兴趣的信号，并立即返回，当数据准备完成的信号触发时，系统通知进程，进程调用recvfrom把所读数据复制到应用程序缓冲区。</p>
+</blockquote>
+<p><img src="http://static.codeceo.com/images/2016/03/df8d6a0bee07497ed024bbebdbbf6304.jpg" alt=""></p>
+<blockquote>
+<p>异步I/O：进程调用系统函数，并告诉内核当整个操作完成时如何通知进程。该系统调用立即返回，而且在等待I/O完成期间，进程不被阻塞。当数据准备好，并且复制到应用进程缓冲区后，内核才会产生这个通知。</p>
+</blockquote>
+<p><img src="http://hi.csdn.net/attachment/201007/31/0_1280551287S777.gif" alt=""></p>
+<p>可以用一个比方来更形象了解这几种模型：</p>
+<blockquote>
+<p>有A,B,C,D四个人要吃麦当劳：<br>A点完餐之后一直在窗口等，直到厨房做好汉堡后，拿到窗口来；<br>B点完餐之后找了个位置坐，过一分钟问下服务员有没有做好，直到服务员说做好了，然后把汉堡拿到窗口来，B去窗口取；<br>C是请客，由一个人在窗口等，点了很多份套餐，哪份好了就拿哪份；<br>D是VIP，点完餐之后就在座位上等，汉堡做好后，服务员直接端到座位上来；</p>
+</blockquote>
+<h3 id="IO模型的比较"><a href="#IO模型的比较" class="headerlink" title="IO模型的比较"></a>IO模型的比较</h3><p>下图比较了5种基本I/O模型：<br><img src="http://hi.csdn.net/attachment/201007/31/0_1280551552NVgW.gif" alt=""></p>
+<p>可以看到，尽管阻塞式I/O、非阻塞式I/O、多路复用I/O、信号驱动式I/O在第一阶段的处理不同，但在数据拷贝阶段都处于同步阻塞等待状态，因此可以看作是同步I/O的一种，这里的同步指的是recvfrom这个系统调用。</p>
+<p><img src="https://pic2.zhimg.com/7d3eb389b7724878bd7e12ebc6dbcdb5_b.jpg" alt=""></p>
+<p>在实际应用中，</p>
+<p>对于BIO，通过多线程提高并发能力,解决串行问题.</p>
+<p>对于NIO，轮询占用CPU效率,一般很少直接使用这种模型，而是在其他I/O模型中使用非阻塞I/O这一特性。</p>
+<p>对于信号驱动，在一个tcp连接的生命周期内，有大量的信号需要监听，并且信号目的难以区分，使得对于socket几乎无用，在udp服务程序中可用。</p>
+<p>对于AIO，需要底层操作系统支持，而linux系统并不完全支持异步，windows提供了IOCP的接口支持异步。</p>
+<p>对于IO多路复用，使用select函数进行I/O请求和同步阻塞模型没有太大的区别，甚至还多了添加监视socket，以及调用select函数的额外操作，效率更差。但是使用select以后最大的优势是用户可以在一个线程内同时处理多个socket的I/O请求。用户可以注册多个socket，然后不断地调用select读取被激活的socket，即可达到在同一个线程内同时处理多个I/O请求的目的。而在同步阻塞模型中，必须通过多线程的方式才能达到这个目的。</p>
+<p>调用select/poll该方法由一个用户态线程负责轮询多个socket,直到某个阶段1的数据就绪,再通知实际的用户线程执行阶段2的拷贝。通过一个专职的用户态线程执行非阻塞I/O轮询,模拟实现了阶段一的异步化。</p>
+<p>了解了不同I/O的内容以及特点,如何利用这些知识开发一个并发web服务呢?还需要了解开发服务前需要考虑的性能瓶颈。</p>
+<h3 id="并发性能瓶颈"><a href="#并发性能瓶颈" class="headerlink" title="并发性能瓶颈"></a>并发性能瓶颈</h3><p>高并发就是要解决这样两个问题：如何提高并发连接数？如何处理更快？要解决这两个问题，必须了解在一个网络请求场景下，有哪些因素导致性能瓶颈。</p>
+<p><strong>如何更快?消减IO损耗对CPU的占用，高效利用CPU。</strong></p>
+<p>简单来说，一个网络请求中，包含了CPU的运算及IO读取，IO读取又包含了CPU缓存、内存、硬盘及网络的读取。在计算机中，CPU的运算可以忽略不计，网络读取的时间 &gt;&gt;&gt;&gt; 硬盘读取的时间 &gt;&gt;&gt;&gt; 内存 &gt;&gt; CPU缓存，同时CPU是时间片轮转的，如果一个CPU的任务等待网络读取，那么与正常情况下相比，性能损失是上亿倍的。</p>
+<p>非阻塞IO与异步IO就实现了网络IO读取与CPU运算的低耦合，提高IO处理速度，从内核态的角度进行优化。</p>
+<p><strong>如何更多?合理的利用内存资源。</strong></p>
+<p>最简单的并发处理是一个请求对应一条处理线程。其中存在两个问题，一个是创建线程与销毁线程的开销是很大的，基本会大于线程处理本身的开销；另一个是系统会为每个线程分配内存资源，不可控的生产线程可能会耗尽系统内存资源，导致服务崩溃。<a href="https://github.com/ManAgainstCode/IOModel/tree/master/src/com/zjft/io" target="_blank" rel="external">代码示例1</a></p>
+<p>更好的一种做法是使用线程池来管理线程的创建以及回收，由线程池分配线程，并复用线程，如此可以控制并发数量，同时也提高了并发数量，减少了线程创建及销毁的开销，从用户态的角度进行优化。<a href="https://github.com/ManAgainstCode/IOModel/tree/master/src/com/zjft/io" target="_blank" rel="external">代码示例2</a></p>
+<p>但这个做法仍然会存在一个问题：线程池大小与实际情况所需线程数量的关系不好确定，线程池太大会造成线程资源的浪费，线程池过小，根据线程池机制不同，有可能会导致服务被拒绝。在Java的线程池中，有着比较优雅的处理方式。</p>
+<p>还有没有更优雅的方式呢？答案是有的。</p>
+<h3 id="事件驱动式编程"><a href="#事件驱动式编程" class="headerlink" title="事件驱动式编程"></a>事件驱动式编程</h3><p>事件驱动式编程，是一种异步消息通知的机制，需要注册事件触发条件，需要一个事件循环监听事件，在图形化编程中用的很广泛，如MFC。</p>
+<p>在网络I/O中，多线程的方式能够有效地利用多核CPU的计算资源，但同时也消耗着内存等其他资源，当并发数上升时，吞吐性能会显著下降，资源占有率会明显升高，常见的模型图如下图：</p>
+<p>相比之下，事件驱动式编程也可以看作分治法的一种实践，将一个IO过程划分为不同的子任务，非阻塞的读写+事件触发器。事件驱动式编程可以有效降低资源占用率，更少的线程处理更多的连接，而且编程相对简单。但是事件驱动式编程不适于CPU密集型的操作，比如某个handler的处理会占用很长时间，那么将会阻塞整个进程，而且在并发量不大的情况下，性能未必会超过多线程的方式。</p>
+<h4 id="多路复用之select-poll"><a href="#多路复用之select-poll" class="headerlink" title="多路复用之select/poll"></a>多路复用之select/poll</h4><p>select/poll是Reactor设计模式的实现，见下图：<br><img src="Basic Reacotr 模型" alt=""></p>
+<p>在Reactor设计模式中，由一个线程不断循环等待，负责接受所有handler的注册，并负责向操作系统查询IO是否就绪，如果就绪就调用handler，这个线程的角色就是Reactor，也可以称为Dispatcher。</p>
+<p>在select/poll模型中，由select/poll负责监视文件描述符的状态，一旦某个文件描述符就绪（可读或可写），能够调用回调函数进行处理。在这个过程中，select的动作是阻塞的，但是模拟了异步查询。</p>
+<p>select是操作系统底层实现的，具体的实现可以参考源码，下图展示了基本的原理：</p>
+<p><img src="http://images2015.cnblogs.com/blog/305504/201509/305504-20150918012828961-1176245587.png" alt=""></p>
+<p>其中，FD_SET是加入文件描述符至集合，FD_ZERO是集合清零，FD_ISSET是查询文件描述符是否存在，FD_CLR是移除某个文件描述符。</p>
+<p>select/poll大大减少了系统在线程切换方面的开销，提高并发性，但仍有可以改进之处：</p>
+<ol>
+<li>每次调用select，都要把fd_set从用户态拷贝到内核态，fd_set很大时这是费时操作</li>
+<li>每次调用select，内核态都要遍历fd_set，fd_set很大时这是费时操作</li>
+<li>select支持的文件描述符数量太小，默认是1024</li>
+</ol>
+<h4 id="多路复用之epoll"><a href="#多路复用之epoll" class="headerlink" title="多路复用之epoll"></a>多路复用之epoll</h4><p>epoll出现在linux内核2.6中，是之前的select/poll增强版本，相比select/poll只提供一个select或poll函数，epoll提供了三个函数操作：epoll_create（创建一个epoll句柄）, epoll_ctl（注册监听事件）, epoll_wait（等待事件产生）。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">int epoll_create(int size)；</div><div class="line">int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)；</div><div class="line">int epoll_wait(int epfd, struct epoll_event * events, int maxevents, int timeout);</div></pre></td></tr></table></figure>
+<p>对于第一个缺点，epoll的解决方案在epoll_ctl函数中。每次注册新的事件到epoll句柄中时（在epoll_ctl中指定EPOLL_CTL_ADD），会把所有的fd拷贝进内核，而不是在epoll_wait的时候重复拷贝。epoll保证了每个fd在整个过程中只会拷贝一次。</p>
+<p>对于第二个缺点，epoll的解决方案不像select或poll一样每次都把current轮流加入fd对应的设备等待队列中，而只在epoll_ctl时把current挂一遍（这一遍必不可少）并为每个fd指定一个回调函数，当设备就绪，唤醒等待队列上的等待者时，就会调用这个回调函数，而这个回调函数会把就绪的fd加入一个就绪链表）。epoll_wait的工作实际上就是在这个就绪链表中查看有没有就绪的fd（利用schedule_timeout()实现睡一会，判断一会的效果）。</p>
+<p>对于第三个缺点，epoll没有这个限制，它所支持的FD上限是最大可以打开文件的数目，这个数字一般远大于2048,举个例子,在1GB内存的机器上大约是10万左右，具体数目可以cat /proc/sys/fs/file-max察看,一般来说这个数目和系统内存关系很大。</p>
+<h4 id="非阻塞异步模型"><a href="#非阻塞异步模型" class="headerlink" title="非阻塞异步模型"></a>非阻塞异步模型</h4><p>多路复用是同步的，Proactor提供了一种真正意义上的异步操作，性能更高。在Reactor中，应用注册的是读写就绪事r件，而在Proactor中注册的是读写完成事件，由操作系统实现异步操作。但由于需要操作系统级别的支持，所以有一定的局限性。</p>
+<h3 id="案例分析"><a href="#案例分析" class="headerlink" title="案例分析"></a>案例分析</h3><h4 id="Apache-and-Nginx"><a href="#Apache-and-Nginx" class="headerlink" title="Apache and Nginx"></a>Apache and Nginx</h4><p>Apache和Nginx是目前网络上最流行的两款web服务器，可以参考<a href="http://w3techs.com/technologies/cross/web_server/ranking" target="_blank" rel="external">调查</a>，图例如下：</p>
+<p><img src="https://assets.wp.nginx.com/wp-content/uploads/2015/10/top-sites-w3techs.png" alt=""></p>
+<p>不过由于Apache产生的较早，基本的IO模型是一个进程对应一个请求，即同步阻塞+多进程（线程），导致了在当前的web场景下，不能够满足高并发的应用场景，通常设置最大值为256。</p>
+<p>Nginx采用了epoll/kqueue模型，通过事件驱动的架构提高了并发性能，最大可以支持50000个并发连接数的响应，而且只占用极低内存（Nginx保持10000个活动连接，内存只需2.5M）。</p>
+<p>浅析Nginx的设计架构：</p>
+<ul>
+<li>Nginx由一个master process负责创建很多子进程，其中非常重要的一点是worker进程的数量与cpu核数相同，能够最大化调优系统资源利用率。</li>
+</ul>
+<p><img src="https://segmentfault.com/img/bVtuYY" alt=""></p>
+<ul>
+<li>Nginx的worker内部工作原理：</li>
+</ul>
+<p>阻塞式状态机：</p>
+<p><img src="https://segmentfault.com/img/bVtvGf" alt=""></p>
+<ol>
+<li>web服务器主进程在服务端口上监听新的连接（客户端发起的新游戏的请求）。</li>
+<li>有新的游戏请求时，主进程创建子进程负责完成跟客户端的对弈。主进程继续监听服务端口。</li>
+<li><p>当游戏结束时，子进程要么等待client开始新游戏（通过keepalive机制保活一段时间连接）要么退出（keepalive超时后）。</p>
+<p>这种模型每玩一局server都要创建一个对应的进程来完成对弈。这种架构简单并且容易容易扩展新功能，但有些大炮打蚊子，杀鸡用牛刀的感觉。进程是个重器，系统开销比较大，而解决的问题是个轻量级的问题。容易编程实现但是浪费比较大。</p>
+</li>
+</ol>
+<p>Nginx状态机：</p>
+<p><img src="https://segmentfault.com/img/bVtv9H" alt=""></p>
+<ol>
+<li>worker进程等待listen和connection sockets的事件。（译注：listen socket就是server用来监听新建连接的socket，connection socket是accept系统调用返回的新建socket，详细可参见accept的手册）</li>
+<li>事件发生后，worker进程来处理这些事件：<ul>
+<li>listen socket的事件表示有新的客户端要开始新的游戏。worker通过accept()创建新的connection socket，并加入监听列表。</li>
+<li>connection socket的事件表示客户端走了一步棋，worker进程可以做下一步应对。<br>worker进程从不会在网络IO上阻塞，当它应对完客户端的走棋走出自己的一步后，可以马上应对下一个客户端的走棋或接收新的连接请求。</li>
+</ul>
+</li>
+</ol>
+<p>Nginx的worker进程很容易扩展支持数十万并发连接。每个新接入的连接只需要创建新的socket消耗少量的内存，每个连接的系统开销相对要比进程开销小很多。另外通过Nginx worker进程绑定CPU技术可以进一步减少上下文切换和cache失效等系统开销。<br>而阻塞式每个进程服务一个连接的方式，每个连接都会消耗很多资源，而且进程切换比较频繁导致系统开销比较大。</p>
+<h4 id="性能测试【quiz】"><a href="#性能测试【quiz】" class="headerlink" title="性能测试【quiz】"></a>性能测试【quiz】</h4><ol>
+<li>相同环境下安装apache，nginx</li>
+</ol>
+<p><code>uname -a</code>：查看内核版本</p>
+<p><code>head -n 1 /etc/issue</code>：查看操作系统版本</p>
+<p><code>cat /proc/cpuinfo</code>：查看cpu信息</p>
+<p><code>cat /proc/meminfo</code>：查看内存信息</p>
+<p>centos 7.x系统根据官方指南进行安装：</p>
+<p><code>yum install httpd</code></p>
+<p><code>yum install nginx</code></p>
+<p>查看server版本：</p>
+<p><code>rpm -qa | grep nginx</code>：nginx-1.8.1-1.el7.ngx.x86_64</p>
+<p><code>rpm -qa | grep apache</code>：httpd-2.4.6-40.el7.centos.x86_64</p>
+<ol>
+<li>配置apache，nginx，linux</li>
+</ol>
+<p>配置nginx：</p>
+<p>配置apache</p>
+<ol>
+<li>测试工具选择，进行测试</li>
+</ol>
+<p>webbench -c 连接数 -t 时间 地址</p>
+<ol>
+<li>分析结果</li>
+</ol>
+<p>linux系统调优：</p>
+<ul>
+<li><p>文件描述符</p>
+</li>
+<li><p>tcp调优</p>
+</li>
+</ul>
+<p>估算并发连接数：</p>
+<p>考虑网络带宽，硬件配置</p>
+<h3 id="Java-IO"><a href="#Java-IO" class="headerlink" title="Java IO"></a>Java IO</h3><p>JAVA提供了BIO、NIO、AIO三种编程API，JDK针对不同的操作系统实现方式不同，如在linux2.6以后NIO以epoll实现，AIO以epoll实现；在windows下NIO以select实现，AIO以IOCP实现，具体可以参考<a href="http://download.java.net/openjdk/jdk8/" target="_blank" rel="external">JDK源码</a>。</p>
+<p>传统流I/O是基于字节的，所有I/O都被视为单个字节的移动；而NIO是基于块的，NIO的性能肯定优于流I/O，要得益于其使用的结构更接近操作系统执行I/O的方式：通道和缓冲器。我们可以把它想象成一个煤矿，通道是一个包含煤层（数据）的矿藏，而缓冲器则是派送 到矿藏的卡车。卡车载满煤炭而归，我们再从卡车上获得煤炭。也就是说，我们并没有直接和通道交互；我们只是和缓冲器交互，并把缓冲器派送到通道。通道要么 从缓冲器获得数据，要么向缓冲器发送数据。</p>
+<p>NIO能够显著地提高IO并发数，但是不意味着任何场景都应该使用NIO，因为缓冲区中的数据不读取出来就无法去判断内容，需要根据场景来判断。</p>
+<h4 id="JAVA-NIO编程"><a href="#JAVA-NIO编程" class="headerlink" title="JAVA NIO编程"></a>JAVA NIO编程</h4><p>Java抽象提供了一套NIO编程API，包含四个核心API方面：Channel，Buffer，Selector，SelectionKey</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line"></div><div class="line"><span class="keyword">public</span> <span class="keyword">abstract</span> <span class="class"><span class="keyword">class</span> <span class="title">ServerSocketChannel</span> <span class="keyword">extends</span> <span class="title">AbstractSelectableChannel</span> <span class="keyword">implements</span> <span class="title">NetworkChannel</span></span></div><div class="line"></div><div class="line"><span class="title">public</span> <span class="title">abstract</span> <span class="title">class</span> <span class="title">SocketChannel</span> <span class="keyword">extends</span> <span class="title">AbstractSelectableChannel</span> <span class="keyword">implements</span> <span class="title">ByteChannel</span>, <span class="title">ScatteringByteChannel</span>, <span class="title">GatheringByteChannel</span>, <span class="title">NetworkChannel</span></div><div class="line"></div><div class="line"><span class="title">public</span> <span class="title">abstract</span> <span class="title">class</span> <span class="title">ByteBuffer</span> <span class="keyword">extends</span> <span class="title">Buffer</span> <span class="keyword">implements</span> <span class="title">Comparable</span>&lt;<span class="title">ByteBuffer</span>&gt;</div><div class="line"></div><div class="line"><span class="title">public</span> <span class="title">abstract</span> <span class="title">class</span> <span class="title">Selector</span> <span class="keyword">extends</span> <span class="title">Object</span> <span class="keyword">implements</span> <span class="title">Closeable</span></div><div class="line"></div><div class="line"><span class="title">public</span> <span class="title">abstract</span> <span class="title">class</span> <span class="title">SelectionKey</span> <span class="keyword">extends</span> <span class="title">Object</span></div></pre></td></tr></table></figure>
+<p>Channel和Buffer之间的关系如下图所示：<br><img src="http://ifeve.com/wp-content/uploads/2013/06/overview-channels-buffers1.png" alt=""></p>
+<p>Selector的工作机制参考下图：<br><img src="http://ifeve.com/wp-content/uploads/2013/06/overview-selectors.png" alt=""></p>
+<p>同时需要理解Buffer的工作机制，参考下图：<br><img src="http://ifeve.com/wp-content/uploads/2013/06/buffers-modes.png" alt=""></p>
+<p>Java NIO api发布于jdk1.4，在最新的jdk1.8中，对charset和流式处理做了优化。</p>
+<p>一个单线程的Reactor实现可以参考[<em>代码示例3</em>]<br><img src="Basic Reactor" alt=""></p>
+<p>但是单线程的Reactor并不适用于多核cpu,那么就有了Reactor的多线程实现模式，其中一种是Worker Thread Pools参考[<em>代码示例</em>]，<br><img src="Worker Thread Pools" alt=""></p>
+<h4 id="JAVA-AIO编程"><a href="#JAVA-AIO编程" class="headerlink" title="JAVA AIO编程"></a>JAVA AIO编程</h4><p>Java AIO api发布于jdk1.7，常用类包含AsynchronousServerSocketChannel, AsynchronousSocketChannel, AsynchronousChannelGroup, CompletionHandler，有两种方式实现异步：</p>
+<ol>
+<li>Future集合</li>
+</ol>
+<p>examples：<br><figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div></pre></td><td class="code"><pre><div class="line">ExecutorService exec = Executors.newCachedThreadPool();</div><div class="line">AsynchronousServerSocketChannel asynServerSocketChannel = AsynchronousServerSocketChannel.open().bind(<span class="keyword">new</span> InetSocketAddress(<span class="number">5000</span>));</div><div class="line"></div><div class="line"><span class="keyword">while</span> (<span class="keyword">true</span>) &#123;</div><div class="line">	Future&lt;AsynchronousSocketChannel&gt; future = asynServerSocketChannel.accept();</div><div class="line">	AsynSocketChannel channels = future.get();</div><div class="line">	exec.exectur(<span class="keyword">new</span> Runnable() &#123;</div><div class="line">		<span class="meta">@public</span> <span class="function"><span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</div><div class="line">		......</div><div class="line">		&#125;</div><div class="line">	&#125;)</div><div class="line">&#125;</div></pre></td></tr></table></figure></p>
+<ol>
+<li>CompletionHandler(callback)注册</li>
+</ol>
+<p>jdk example：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">final</span> AsynchronousServerSocketChannel listener = AsynchronousServerSocketChannel.open().bind(<span class="keyword">new</span> InetSocketAddress(<span class="number">5000</span>));</div><div class="line">		</div><div class="line">listener.accept(<span class="keyword">null</span>, <span class="keyword">new</span> CompletionHandler&lt;AsynchronousSocketChannel, Void&gt;() &#123;</div><div class="line">	<span class="meta">@Override</span></div><div class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">completed</span><span class="params">(AsynchronousSocketChannel result,Void attachment)</span> </span>&#123;	</div><div class="line">		listener.accept(<span class="keyword">null</span>, <span class="keyword">this</span>);</div><div class="line">		handle(result);</div><div class="line">		&#125;</div><div class="line">	</div><div class="line">	<span class="meta">@Override</span>	</div><div class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">failed</span><span class="params">(Throwable exc, Void attachment)</span> </span>&#123;		...</div><div class="line">	&#125;			</div><div class="line">&#125;);</div></pre></td></tr></table></figure>
+<p>[<em>代码示例4</em>]</p>
+<h4 id="mina-netty的IO模型"><a href="#mina-netty的IO模型" class="headerlink" title="mina/netty的IO模型"></a>mina/netty的IO模型</h4><p>[<em>代码示例5，根据AIO/NIO抽象出简单的编程模型然后与netty框架进行比较</em>]</p>
+<p>[<em>代码示例6，Multiple Reactors模型</em>]</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">Selector[] selectors;</div><div class="line"><span class="keyword">int</span> next = <span class="number">0</span>;</div><div class="line"><span class="class"><span class="keyword">class</span> <span class="title">Acceptor</span> </span>&#123;</div><div class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</div><div class="line">	Socket connection = serverSocket.accept();</div><div class="line">	<span class="keyword">if</span> (connection != <span class="keyword">null</span>) </div><div class="line">		<span class="keyword">new</span> Handler(selectors[next], connection);</div><div class="line">	<span class="keyword">if</span> (++next == selectors.length) next = <span class="number">0</span>;	</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>mina框架简介：</p>
+<p>netty框架简介：</p>
+<p>事件驱动的方式编写客户端使得Apache崩溃[quiz]</p>
+<h4 id="模拟开发一个抢红包的web服务"><a href="#模拟开发一个抢红包的web服务" class="headerlink" title="模拟开发一个抢红包的web服务"></a>模拟开发一个抢红包的web服务</h4><p>据各家IT公司公布的数据，今年除夕全天微信用户红包发送总量达到80.9亿个，红包峰值收发量达到40.9万个/秒，</p>
+<p>不涉及架构内容，纯IO层，IM服务器<br>如何去分析一个web应用的性能，不断地进行修改优<br>案例：1亿个客户，于晚上八点准时开始抢红包，模仿微信抢红包的架构方案</p>
+<p>测试过程，调优过程，分析过程</p>
+<p>[<em>代码示例</em>]</p>
+<h4 id="性能调优"><a href="#性能调优" class="headerlink" title="性能调优"></a>性能调优</h4><p>如果想提高系能的性能，首先需要如何定义系统的性能，正如之前的<strong>并发性能瓶颈</strong>中所说的包含两个点：</p>
+<ol>
+<li>吞吐量(throughput)，每秒钟可以处理的请求数</li>
+<li>延迟(latency)，系统处理一个任务的延迟</li>
+</ol>
+<p>一个系统的性能受限于这两个因素，缺一不可，一般来说，吞吐量越大，延迟会越差，因为系统繁忙会造成响应速度降低；延迟越好，吞吐量越大，处理每个任务更快，就可以处理更多的请求。</p>
+<p>其次，需要了解如何测试系统性能：压力测试工具，有很多可以选择，之前使用过HP的loadrunner，编写C语言的测试脚本，还有很多其他开源的测试工具，可以参见附录中的链接。</p>
+<p>最后，如何系统地定位性能瓶颈：</p>
+<ol>
+<li>查看操作系统负载，了解CPU利用率，了解IO状态，了解网络带宽使用情况，了解代码问题。</li>
+<li>使用Profiler测试（分析器），主要是对代码进行调优。</li>
+</ol>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>本文中，首先了解了IO并发中相关的概念及模型，然后讨论了构建高并发IO需要分析的性能瓶颈，进而讨论了事件驱动式编程的IO模型具体设计方法，比较多个主流的高性能IO实现，分析其所运用的基本原理，并通过性能测试对其性能进行评估，最后举例Java中的API实际运用。</p>
+<p>五种模型强调的是提高CPU的利用率，进程或线程的应用强调的是计算资源的分配，结合这两点才能构建好的web服务程序。</p>
+<h2 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h2><ol>
+<li><a href="http://www.cnblogs.com/sharpxiajun/p/3950466.html" target="_blank" rel="external">关于如何提高Web服务端并发效率的异步编程技术</a></li>
+<li><a href="http://blog.arganzheng.me/posts/how-to-improve-server-concurrency.html" target="_blank" rel="external">如何提高服务器并发处理能力</a></li>
+<li><a href="https://www.nginx.com/blog/inside-nginx-how-we-designed-for-performance-scale/" target="_blank" rel="external">Nginx的IO模型</a></li>
+<li><a href="https://www.zhihu.com/question/19901763" target="_blank" rel="external">知乎-多线程有什么用</a></li>
+<li><a href="http://guojing.me/linux-kernel-architecture/posts/process-switch/" target="_blank" rel="external">进程切换开销</a></li>
+<li><a href="http://www.codeceo.com/article/java-io-model-improve.html" target="_blank" rel="external">Java I/O模型的演进</a></li>
+<li><a href="https://segmentfault.com/a/1190000003063859" target="_blank" rel="external">Linux IO模式及select、polle、poll详解</a></li>
+<li><a href="http://ifeve.com/netty-reactor-4/comment-page-1/" target="_blank" rel="external">Netty源码解读</a></li>
+<li><a href="http://www.cnblogs.com/Anker/p/3265058.html" target="_blank" rel="external">select、poll、epoll之间的区别总结</a></li>
+<li><a href="https://www.zhihu.com/question/27590048" target="_blank" rel="external">一秒3W次请求的支付订单</a></li>
+<li><a href="https://www.zhihu.com/question/19809311" target="_blank" rel="external">Java做大并发网站的底层架构</a></li>
+<li><a href="http://www.xiaoyaochong.net/wordpress/index.php/2013/03/24/%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%BC%96%E7%A8%8B%E4%B8%8E%E4%BA%8B%E4%BB%B6%E9%A9%B1%E5%8A%A8%E7%BC%96%E7%A8%8B%E5%AF%B9%E6%AF%94/" target="_blank" rel="external">多线程编程与事件驱动编程对比</a></li>
+<li><a href="https://www.zhihu.com/question/37379084" target="_blank" rel="external">nodejs在双十一中的应用</a></li>
+<li><a href="http://colobu.com/2014/11/13/java-aio-introduction/" target="_blank" rel="external">Java AIO</a></li>
+<li><a href="http://yansu.org/2014/02/15/apache-and-nginx.html" target="_blank" rel="external">从运行原理及使用场景看Apache和Nginx</a></li>
+<li><a href="https://www.nginx.com/blog/nginx-vs-apache-our-view/" target="_blank" rel="external">NGINX vs. Apache: Our View of a Decade-Old Question</a></li>
+<li><a href="http://www.aosabook.org/en/nginx.html" target="_blank" rel="external">The architechture of Nginx</a></li>
+<li><a href="http://blog.csdn.net/mergerly/article/details/26469375" target="_blank" rel="external">一 100万并发连接服务器笔记之准备篇</a></li>
+<li><a href="http://www.oschina.net/question/234345_47846" target="_blank" rel="external">windows与linux的异步IO在设计上的差异</a></li>
+<li><a href="http://www.importnew.com/14506.html" target="_blank" rel="external">Java并发的四种风格</a></li>
+<li><a href="http://www.aosabook.org/en/nginx.html" target="_blank" rel="external">Nginx架构详解</a></li>
+<li><a href="https://m.oschina.net/blog/132361" target="_blank" rel="external">BIO|NIO|AIO（Java版）</a></li>
+<li><a href="https://www.ibm.com/developerworks/cn/java/j-lo-nio2/" target="_blank" rel="external">在 Java 7 中体会 NIO.2 异步执行的快乐</a></li>
+<li><a href="http://www.blogjava.net/killme2008/archive/2009/09/20/295743.html" target="_blank" rel="external">Java AIO编程</a></li>
+<li><a href="http://coolshell.cn/articles/7490.html" target="_blank" rel="external">性能调优攻略</a></li>
+<li><a href="http://www.cnblogs.com/killkill/archive/2010/04/14/1711810.html" target="_blank" rel="external">Nginx折腾记</a></li>
+<li><a href="https://segmentfault.com/a/1190000002491609" target="_blank" rel="external">MAC下性能测试客户端</a></li>
+<li><a href="http://www.ibm.com/developerworks/cn/java/j-lo-javawebhiperf1/" target="_blank" rel="external">Java Web高性能开发</a></li>
+<li><a href="http://www.infoq.com/cn/articles/thread-pools-boost-performance-9x" target="_blank" rel="external">Nginx使用线程池提高性能</a></li>
+<li><a href="http://www.infoq.com/cn/articles/practice-of-java-nio-communication-framework" target="_blank" rel="external">Java NIO通信框架在电信领域的实践</a></li>
+<li><a href="https://yq.aliyun.com/articles/2371" target="_blank" rel="external">理解Java NIO</a></li>
+<li><a href="http://ifeve.com/overview/" target="_blank" rel="external">Java NIO概述</a></li>
+<li><a href="http://www.javaworld.com/article/2078654/java-se/java-se-five-ways-to-maximize-java-nio-and-nio-2.html" target="_blank" rel="external">Five ways to maximize Java NIO and NIO.2</a></li>
+<li><a href="http://www.importnew.com/15656.html" target="_blank" rel="external">netty实现原理浅析</a></li>
+<li><a href="https://gist.github.com/jcouyang/9914091" target="_blank" rel="external">为什么事件驱动这么火</a></li>
+<li><a href="http://www.kegel.com/c10k.html#frameworks" target="_blank" rel="external">C10k问题</a></li>
+<li><a href="http://hongweiyi.com/2014/05/netty-mina-in-depth-1/" target="_blank" rel="external">netty mina in depth</a></li>
+<li><a href="http://www.admin10000.com/document/6190.html" target="_blank" rel="external">高并发Web服务的演变——节约系统内存和CPU</a></li>
+<li><a href="http://www.infoq.com/cn/articles/netty-million-level-push-service-design-points" target="_blank" rel="external">Netty系列之Netty百万级推送服务设计要点
+</a></li>
+<li><a href="http://www.infoq.com/cn/articles/netty-high-performance/" target="_blank" rel="external">Netty系列之Netty高性能之道</a></li>
+</ol>
+</div></article></div></section><footer><div class="paginator"><a href="/2016/04/25/jdk1.8 Hashmap源码分析/" class="prev">上一篇</a><a href="/2016/03/05/Java Memory Model &amp; GC/" class="next">下一篇</a></div><div class="copyright"><p>© 2015 - 2016 <a href="http://lpbobo.com">fish·nut</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p><p><span>友情链接</span>&#58;&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://blog.csdn.net/sum__mer">sum__mer </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://www.rudy-yuan.net">rudy-yuan </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://elvin.im">花花世界 </a></p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.6.1/MathJax.js?config=TeX-MML-AM_CHTML"></script></body></html>

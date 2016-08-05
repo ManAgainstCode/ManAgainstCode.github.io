@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="zh-cn"><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> Java单例模式 · Mi Tang</title><meta name="description" content="Java单例模式 - fish·nut"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="short icon" href="/favicon.png"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="http://lpbobo.com/atom.xml" title="Mi Tang"></head><body><header><a href="/" class="logo-link"><img src="/favicon.png"></a><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">HOME</a></li><li class="nav-list-item"><a href="/categories/Science" target="_self" class="nav-list-link">SCIENCE</a></li><li class="nav-list-item"><a href="/categories/Trip" target="_self" class="nav-list-link">TRIP</a></li><li class="nav-list-item"><a href="/About" target="_self" class="nav-list-link">WE</a></li></ul></header><div class="wrap"><section class="container"><div class="post"><article class="post-block"><h1 class="post-title">Java单例模式</h1><div class="post-info">2016年2月4日</div><div class="post-content"><blockquote>
+<p>单例模式应用在某个类只产生一个实例对象的情况，通常资源，如线程池、日志对象、打印机、显卡驱动被设计为单例，单例可以进行统一资源分配。</p>
+</blockquote>
+<a id="more"></a>
+<h3 id="方法一"><a href="#方法一" class="headerlink" title="方法一"></a>方法一</h3><pre><code>public class Singleton() {
+
+    private Singleton() {};
+
+    private static final Singleton instance = new Singleton();
+
+    public static Singleton getInstance() {
+        return instance;
+    }
+}
+</code></pre><p>这种方法被称为饿汉式，在类创建时就已经产生了实例对象，因而线程安全。</p>
+<h3 id="方法二"><a href="#方法二" class="headerlink" title="方法二"></a>方法二</h3><pre><code>public class Singleton() {
+
+    private Singleton() {};
+
+    private static Singleton instance = null;
+
+    public static Singleton getInstance() {
+        if (instance == null) {
+            instance = new Singleton();                    }
+        return instance;
+    }
+}
+</code></pre><p>这种方法被称为懒汉式单例，但是会出现线程不安全的问题，解决方法通常有以下几种：</p>
+<h4 id="方法三"><a href="#方法三" class="headerlink" title="方法三"></a>方法三</h4><pre><code>getInstance前加同步锁，但影响效率。
+</code></pre><h4 id="方法四"><a href="#方法四" class="headerlink" title="方法四"></a>方法四</h4><pre><code>双重检查锁定
+</code></pre><h4 id="方法五"><a href="#方法五" class="headerlink" title="方法五"></a>方法五</h4><pre><code>内部静态类，延迟加载
+</code></pre></div></article></div></section><footer><div class="paginator"><a href="/2016/02/05/调查socketserver connection refused/" class="prev">上一篇</a><a href="/2016/01/20/Git server/" class="next">下一篇</a></div><div class="copyright"><p>© 2015 - 2016 <a href="http://lpbobo.com">fish·nut</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p><p><span>友情链接</span>&#58;&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://blog.csdn.net/sum__mer">sum__mer </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://www.rudy-yuan.net">rudy-yuan </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://elvin.im">花花世界 </a></p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.6.1/MathJax.js?config=TeX-MML-AM_CHTML"></script></body></html>

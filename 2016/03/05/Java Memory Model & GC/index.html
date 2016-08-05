@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="zh-cn"><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> java内存模型及GC算法 · Mi Tang</title><meta name="description" content="java内存模型及GC算法 - fish·nut"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="short icon" href="/favicon.png"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="http://lpbobo.com/atom.xml" title="Mi Tang"></head><body><header><a href="/" class="logo-link"><img src="/favicon.png"></a><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">HOME</a></li><li class="nav-list-item"><a href="/categories/Science" target="_self" class="nav-list-link">SCIENCE</a></li><li class="nav-list-item"><a href="/categories/Trip" target="_self" class="nav-list-link">TRIP</a></li><li class="nav-list-item"><a href="/About" target="_self" class="nav-list-link">WE</a></li></ul></header><div class="wrap"><section class="container"><div class="post"><article class="post-block"><h1 class="post-title">java内存模型及GC算法</h1><div class="post-info">2016年3月5日</div><div class="post-content"><p>jvm是java的运行平台，管理java对象的生存周期，熟悉jvm有助于编写性能更优的代码，同时调优高性能应用。如果这没吸引力，那么groovy，scala听过吧，都是跑在jvm上，魅力大否？</p>
+<a id="more"></a>
+<p>注：本文中的主要内容均来自网络整理，详见附录。</p>
+<h3 id="jvm"><a href="#jvm" class="headerlink" title="jvm"></a>jvm</h3><p>jvm运行时的内存结构如下图所示：</p>
+<p><img src="http://img.blog.csdn.net/20130707143822843?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvc2h1YW5neXVl/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70/gravity/SouthEast" alt=""></p>
+<p><img src="http://img.mukewang.com/56caacb00001a9f910240607.png" alt=""></p>
+<h3 id="java内存模型（Java-Memory-Model）"><a href="#java内存模型（Java-Memory-Model）" class="headerlink" title="java内存模型（Java Memory Model）"></a>java内存模型（Java Memory Model）</h3><p>对象和类分别存储在三个不同的区域：堆、方法区、本地区，如下图所示：</p>
+<p><img src="http://ifeve.com/wp-content/uploads/2015/05/JUtH_20121024_RuntimeDataAreas_1_MemoryModel-1.png" alt=""></p>
+<p>堆内存（Heap Space）存放<strong>对象</strong>、<strong>数组</strong>的数据；<br>方法区（Method Area）存放类的结构信息（类名、方法、字段）、静态变量、编译器编译后的代码；</p>
+<pre><code>在加载阶段主要用到方法区
+</code></pre><p>本地区（Native Area）存放线程栈、本地方法栈；</p>
+<p>从内存分配的角度，JMM如下图所示：</p>
+<p><img src="http://ifeve.com/wp-content/uploads/2015/05/JUtH_20121024_RuntimeDataAreas_6_MemoryModel.png" alt=""></p>
+<p>Eden区存放新建的或短期的对象；<br>Survivor区存放幸存的或者中期对象；<br>老年区存放始终存在或长期的对象；</p>
+<h4 id="实例分析"><a href="#实例分析" class="headerlink" title="实例分析"></a>实例分析</h4><figure class="highlight java"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line"></div><div class="line"><span class="keyword">import</span> java.text.SimpleDateFormat;</div><div class="line"><span class="keyword">import</span> java.util.Date;</div><div class="line"></div><div class="line"><span class="keyword">import</span> org.apache.log4j.Logger;</div><div class="line"></div><div class="line"><span class="keyword">public</span> <span class="class"><span class="keyword">class</span> <span class="title">HelloWorld</span> </span>&#123;</div><div class="line">	</div><div class="line">	<span class="keyword">private</span> <span class="keyword">static</span> Logger logger = Logger.getLogger(HelloWorld.getClass().getName());</div><div class="line"></div><div class="line">	<span class="function"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title">sayHello</span><span class="params">(String message)</span> </span>&#123;</div><div class="line">		SimpleDateFormat formatter = <span class="keyword">new</span> SimpleDateFormat(<span class="string">"dd.MM.YYYY"</span>);</div><div class="line">		String today = formatter.format(<span class="keyword">new</span> Date());</div><div class="line">		logger.info(today + <span class="string">" : "</span> + message);</div><div class="line">	&#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<p>堆：logger，formatter，today，HelloWorld</p>
+<p>方法区：SimpleDateFormat:{},Logger:{},HelloWorld:{}</p>
+<p>本地区-线程栈：ParameterReference:message, LocalVariableReference:formatter,today<br>LocalPrimitiveType:lineN0.</p>
+<p><img src="http://ifeve.com/wp-content/uploads/2015/05/JUtH_20121024_RuntimeDataAreas_4_MemoryModel.png" alt=""></p>
+<h3 id="从字节码到JVM内存模型，浅析JVM类加载过程"><a href="#从字节码到JVM内存模型，浅析JVM类加载过程" class="headerlink" title="从字节码到JVM内存模型，浅析JVM类加载过程"></a>从字节码到JVM内存模型，浅析JVM类加载过程</h3><p>参考附录4[java类加载过程分析]</p>
+<h3 id="GC算法"><a href="#GC算法" class="headerlink" title="GC算法"></a>GC算法</h3><p>mark-sweep:标记，回收</p>
+<p>copying：新生代，分块复制，回收</p>
+<p>mark-compact:老年代，移动分界，回收</p>
+<h3 id="OutofMemoryErrors"><a href="#OutofMemoryErrors" class="headerlink" title="OutofMemoryErrors"></a>OutofMemoryErrors</h3><p>Exception in thread “main”:java.lang.OutOfMemoryError: Java heap space</p>
+<p>原因：对象不能被分配到堆内存中；</p>
+<p>Exception in thread “main”:java.lang.OutOfMemoryError: PermGen space</p>
+<p>原因：类或者方法不能被加载到老年代。它可能出现在一个程序加载很多类的时候，比如引用了很多第三方的库</p>
+<p>Exception in thread “main”:java.lang.OutOfMemoryError: Requested array size exceeds VM limit</p>
+<p>原因：创建的数组大于堆内存的空间</p>
+<p>Exception in thread “main”:java.lang.OutOfMemoryError: request <size> bytes for <reason>. Out of swap space?</reason></size></p>
+<p>原因：分配本地分配失败。JNI、本地库或者Java虚拟机都会从本地堆中分配内存空间    </p>
+<p>Exception in thread “main”:java.lang.OutOfMemoryError: <reason><stack trace="">(Native Method)</stack></reason></p>
+<p>原因：同样是本地方法内存分配失败，只不过是JNI或者本地方法或者Java虚拟机发现</p>
+<h3 id="附录"><a href="#附录" class="headerlink" title="附录"></a>附录</h3><ol>
+<li><a href="http://ifeve.com/under-the-hood-runtime-data-areas-javas-memory-model/" target="_blank" rel="external">并发编程网-Java的内存模型及结构</a></li>
+<li><a href="http://ifeve.com/java-memory-model-0/" target="_blank" rel="external">并发编程网-深入理解Java内存模型</a></li>
+<li><a href="http://www.cnblogs.com/hellocsl/p/3969768.html" target="_blank" rel="external">深入理解JVM之JVM内存区域与内存分配</a></li>
+<li><a href="http://blog.csdn.net/shuangyue/article/details/9262791" target="_blank" rel="external">java类加载过程分析</a></li>
+<li><a href="http://www.imooc.com/article/4921" target="_blank" rel="external">JVM内幕：java虚拟机详解</a></li>
+</ol>
+</div></article></div></section><footer><div class="paginator"><a href="/2016/04/21/高并发IO模型/" class="prev">上一篇</a><a href="/2016/03/05/centos下安装mysql/" class="next">下一篇</a></div><div class="copyright"><p>© 2015 - 2016 <a href="http://lpbobo.com">fish·nut</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p><p><span>友情链接</span>&#58;&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://blog.csdn.net/sum__mer">sum__mer </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://www.rudy-yuan.net">rudy-yuan </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://elvin.im">花花世界 </a></p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.6.1/MathJax.js?config=TeX-MML-AM_CHTML"></script></body></html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="zh-cn"><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> 调查SocketServer拒绝客户端连接的问题 · Mi Tang</title><meta name="description" content="调查SocketServer拒绝客户端连接的问题 - fish·nut"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="short icon" href="/favicon.png"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="http://lpbobo.com/atom.xml" title="Mi Tang"></head><body><header><a href="/" class="logo-link"><img src="/favicon.png"></a><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">HOME</a></li><li class="nav-list-item"><a href="/categories/Science" target="_self" class="nav-list-link">SCIENCE</a></li><li class="nav-list-item"><a href="/categories/Trip" target="_self" class="nav-list-link">TRIP</a></li><li class="nav-list-item"><a href="/About" target="_self" class="nav-list-link">WE</a></li></ul></header><div class="wrap"><section class="container"><div class="post"><article class="post-block"><h1 class="post-title">调查SocketServer拒绝客户端连接的问题</h1><div class="post-info">2016年2月5日</div><div class="post-content"><p>调查Socket server拒绝客户端连接的问题，server由Java Mina编写，深入tcp底层探索问题原因。</p>
+<a id="more"></a>
+<p>问题描述：</p>
+<blockquote>
+<p>java开发的实时报表服务器，负责处理客户端的请求报文，采用Mina框架实现IO层。昨天客户端突然报来一个问题：多个页面实例对应多个客户端线程，同时去连接服务器，第一个请求之后的都会被拒绝，如果间隔500ms去连接，不会出现问题。</p>
+</blockquote>
+<p>当时就分析了下客户端的日志，发现基本是相隔2ms就会发送一条xml报文。当时以为服务端的日志会报出异常，就邮件让客户取了回来，结果发现并没有，而客户端的open connection是必现的。客户比较紧急，就花时间仔细分析下问题，加强自己对tcp的理解，尽管花费几天，但最终问题还是解决了。</p>
+<h3 id="问题会在哪？"><a href="#问题会在哪？" class="headerlink" title="问题会在哪？"></a>问题会在哪？</h3><p>客户端与服务端建立tcp的过程图如下所示：<br><img src="http://7xlu9w.com1.z0.glb.clouddn.com/mitang_science_socketserver.png" alt=""></p>
+<p>从已有的知识储备，自己提出了几个疑点：</p>
+<ul>
+<li>之前做过压力测试，并没有出现这种问题，会不会是客户端的原因，造成了open connection失败？</li>
+<li>server accept是会阻塞的，mina采用的是selector模型，在select时是会阻塞的。会不会是这个阻塞的时间超过了客户端多次连接的间隔，造成了客户端的连接被拒绝？</li>
+<li>如果客户端没有问题的话，那么tcp连接建立过程还需要两个环节：host + server，host是windows server 2008， server就是我们的程序，会不会问题出现在系统的配置？</li>
+</ul>
+<h3 id="初步分析"><a href="#初步分析" class="headerlink" title="初步分析"></a>初步分析</h3><ol>
+<li>tcp连接的四元组：源ip，源port，目的ip，目的port。socket是面向tcp的接口，服务端监听socket与accept产生的socket非同一个，如果服务端使用同一个socket实例，那么客户端再次连接时会报10056(socket is already connected)的错误。</li>
+<li>如果可以重现问题的话，可以排除客户端程序的问题。</li>
+<li>问题只会发生在ms间隔内产生多个连接时。</li>
+<li>mina支持非阻塞IO，在三个客户端的情况下，select的阻塞也不至于产生连接被拒绝的问题。</li>
+</ol>
+<p>那么问题是不是出现在服务器的配置呢，有什么参数能够影响到瞬时连接的个数呢？</p>
+<h3 id="重现问题"><a href="#重现问题" class="headerlink" title="重现问题"></a>重现问题</h3><p>为了能够观察到tcp连接的过程，重新问题出现的过程，我在自己的windows机器上搭建了socketserver的环境，同时编写客户端的测试程序，之前使用loadrunner写的c语言脚本，在自己的机器上，还是用python处理最快，最方便。</p>
+<p>客户端请求的报文体类型为xml，报文头16个字节，内容为报文正文长度，十六进制表示。在编写python脚本的时候，需要设置十六进制的报文头，才能被server正确接收：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line"><span class="comment"># 设置十六进制报文头，python </span></div><div class="line">headerHexStr = <span class="string">"35303100000000000000000000000000"</span></div><div class="line">headerHex = <span class="string">""</span></div><div class="line"><span class="keyword">while</span> headerHexStr:</div><div class="line">    hexStr = headerHexStr[<span class="number">0</span>:<span class="number">2</span>]  	</div><div class="line">    s = int(hexStr, <span class="string">"16"</span>)</div><div class="line">    headerHex += struct.pack(<span class="string">"B"</span>, s)</div><div class="line">    headerHexStr = headerHexStr[<span class="number">2</span>:]</div><div class="line"><span class="keyword">print</span> headerHex</div></pre></td></tr></table></figure>
+<p>python client完整程序：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div></pre></td><td class="code"><pre><div class="line"><span class="keyword">import</span> socket, struct, threading</div><div class="line">    </div><div class="line"><span class="function"><span class="keyword">def</span> <span class="title">handler</span><span class="params">(message)</span>:</span></div><div class="line">	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)</div><div class="line">	<span class="comment"># serverip，port stands for the real value</span></div><div class="line">	s.connect((<span class="string">"serverip"</span>, port))</div><div class="line">	s.send(message)</div><div class="line">	s.recv(<span class="number">1024</span>)	</div><div class="line">	s.close()</div><div class="line"></div><div class="line">body=<span class="string">"&lt;?xml version=\"1.0\" encoding=\"GB2312\"?&gt;&lt;body&gt;&lt;/body&gt;"</span></div><div class="line">message = headerHex + body</div><div class="line">         </div><div class="line">num = <span class="number">0</span></div><div class="line"><span class="keyword">while</span> num &lt; <span class="number">5</span>:</div><div class="line">    t = threading.Thread(target=handler, args=(message,))</div><div class="line">	t.start()</div><div class="line">	num = num + <span class="number">1</span></div></pre></td></tr></table></figure>
+<p>果然，运行这段脚本的时候，从客户端能够看到<code>[Errno 111] Connect Refused</code>错误，5个客户端连接只有第一个被连接。如果在每个线程启动前都增加5ms的超时时间，连接就会被处理。</p>
+<p>此时，服务端明显暴露问题，但是在socket server的日志中没有发现任何异常，也就是说连接在host就被拒绝了，那么是不是host的配置问题呢？</p>
+<h3 id="纠察操作系统"><a href="#纠察操作系统" class="headerlink" title="纠察操作系统"></a>纠察操作系统</h3><p>四种情况下模拟测试（W: windows 7，C：centos）：</p>
+<ol>
+<li>W作为客户端，C作为服务端；</li>
+<li>W作为客户端，W作为服务端；</li>
+<li>C作为客户端，W作为服务端；</li>
+<li>C作为客户端，C作为服务端；</li>
+</ol>
+<p>C的机器性能要比W好一些，四种情况下只有第三种会出现<code>Errno 111</code>。</p>
+<p>可能是最近受到《High Performance Browser Networking》这本书的影响，自然将注意力放到了windows机器上。</p>
+<p>在客户端上加了些时间点，发现centos的客户端发送socket的请求速度比windows要快很多。是不是因为client发送socket请求过快，导致了windows的机器无法处理呢？</p>
+<p>于是乎我在网上开始到处搜集windows系统下的tcp优化方案，集中在注册表的参数修改上，试了一些却依然没有效果。</p>
+<p>那么问题到底在哪？看来还是需要抓包分析一下在tcp建立的过程中到底发生了什么。</p>
+<h3 id="抓包分析"><a href="#抓包分析" class="headerlink" title="抓包分析"></a>抓包分析</h3><p>之前一直没有用过抓包工具，总觉得很神奇，有点打怵，实际用起来也还是很方便的。</p>
+<p>抓包的结果见下图，132是客户端，136是服务端：<br><img src="http://7xlu9w.com1.z0.glb.clouddn.com/mitang_science_wireshark%20packet%20blur.png" alt=""></p>
+<p>[RST,ACK]包的具体内容见下图：<br><img src="http://7xlu9w.com1.z0.glb.clouddn.com/mitang_science_wireshark%20packet%20spec%20mask.png" alt=""></p>
+<p>分析：第97行是第一个客户端发送的SYN，98行是服务端返回的[SYN,ACK]，99行是第二个客户端发送的SYN，100行提示服务端返回[RST,ACK]，重置连接，之后的三个连接也是如此。</p>
+<p>服务端会在什么情况下收到SYN后返回[RST,ACK]呢？</p>
+<p>遇到问题时，除了google，程序员还有另一项神奇：SO。</p>
+<h3 id="stackoverflow"><a href="#stackoverflow" class="headerlink" title="stackoverflow"></a>stackoverflow</h3><p>在网站上提了一个问题：</p>
+<blockquote>
+<p><a href="http://stackoverflow.com/questions/35056711/windows-server-2008-send-rst-ack-packets-while-several-clients-ask-for-tcp-co" target="_blank" rel="external">Windows server 2008 send [RST, ACK] packets while several clients ask for tcp connections at the same time(less than 5ms)</a></p>
+</blockquote>
+<p>13个小时以后就有人回了一条：</p>
+<blockquote>
+<p>The issue is that you have filled the backlog queue, whereupon Windows starts issuing resets to further incoming connection requests.</p>
+<p>This could be because you specified a small backlog value, but the more likely cause is that your server is simply not accepting connections fast enough: your accept loop is fiddling around doing other things, such as DNS calls or even I/O with the client, all of which should be done in the client’s thread. All the accept loop should do is accept sockets and start threads.</p>
+</blockquote>
+<p>什么是backlog？</p>
+<p>backlog，主要是指当ServerSocket还没执行accept时，这个时候的请求会放在os层面的一个队列里，这个队列的大小即为backlog值，这个参数对于大量连接涌入的场景非常重要，例如服务端重启，所有客户端自动重连，瞬间就会涌入很多连接，如backlog不够大的话，可能会造成客户端接到连接失败的状况，再次重连，结果就会导致服务端一直处理不过来（当然，客户端重连最好是采用类似tcp的自动退让策略），backlog的默认值为os对应的net.core.somaxconn，调整backlog队列的大小一定要确认ulimit -n中允许打开的文件数是够的。</p>
+<p>os上还提供了net.core.netdev_max_backlog和net.ipv4.tcp_max_syn_backlog来设置全局的backlog队列大小（一个是建立连接的queue总队列的大小，一个是等到客户端ACK的SYN队列的大小）。</p>
+<p>[修改于2016-06-03日]，也就是说，backlog形容的是Established队列的大小，是listen(socket, backlog)的第二个参数。<br>[deprecated: 也就是说，backlog形容的是server在与客户端建立tcp连接的过程中，SYN队列的大小，在socket的listen接口中，一般第二个参数就是backlog的大小。]</p>
+<p>在之前的优化windows系统tcp连接参数中，也看到过在注册表的AFD/parameters下设置tcp backlog参数，显然三个连接就被拒绝不是因为windows host的backlog过小导致的。</p>
+<h3 id="解决问题"><a href="#解决问题" class="headerlink" title="解决问题"></a>解决问题</h3><p>问题已经基本定位：server的backlog值过小。</p>
+<p>查看mina的api文档，看到了SocketAcceptor有<code>setbacklog()</code>/<code>getbacklog()</code>的接口，在查看spring下的配置，果然发现了在acceptor的bean配置中，包含了backlog属性，而这个值就是1。</p>
+<p>backlog=1，看到这，就知道问题的根本原因已经找到了。</p>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>解决这个问题前前后后一共花费了我4天的时间，恢复代码花了半天。尽管最后问题的产生的根本是来自一个配置项，但是举一反三，之后对server优化的思路更加明确了，会更加得心应手。</p>
+<p>时间是长了一点，但是思维基本是明确的，有一段时间一直怀疑是windows的问题，对于server和host之间的微妙关系不太理解，花了好长的时间在优化注册表、重启机器、替换机器、重启……</p>
+<p>仔细想想，问题的导火索确实是client的多个tcp在5ms内进行连接，拒绝连接的实施者是windows。自己兜圈子的地方是拒绝连接的号令者：windows or server? </p>
+<p>兜圈子的原因还是对tcp连接的过程不够熟悉，几遍三次握手也包含了很多细节的过程，想想自己看xmpp协议的过程，觉得有必要再从根本上啃一啃这块硬骨头。</p>
+<p>生产过程中，经常会遇到很多紧急的问题，排除障眼法，直捣黄龙是需要经验和知识的积累的，keep on moving！</p>
+<h2 id="附录"><a href="#附录" class="headerlink" title="附录"></a>附录</h2><h3 id="Errno-111-Connection-Refused"><a href="#Errno-111-Connection-Refused" class="headerlink" title="[Errno 111] Connection Refused."></a>[Errno 111] Connection Refused.</h3><p>Use a packet sniffer like Wireshark to look at what happens. You need to see a SYN-flagged packet outgoing, a SYN+ACK-flagged incoming and then a ACK-flagged outgoing. After that, the port is considered open on the local side.</p>
+<p>If you only see the first packet and the error message comes after several seconds of waiting, the other side is not answering at all (like in: unplugged cable, overloaded server, misguided packet was discarded) and your local network stack aborts the connection attempt. If you see RST packets, the host actually denies the connection. If you see “ICMP Port unreachable” or host unreachable packets, a firewall or the target host inform you of the port actually being closed.</p>
+<p>Of course you cannot expect the service to be available at all times (consider all the points of failure in between you and the data), so you should try again later.</p>
+<h3 id="window-size-scaling-factor-1-unknown"><a href="#window-size-scaling-factor-1-unknown" class="headerlink" title="window size scaling factor: -1(unknown)"></a>window size scaling factor: -1(unknown)</h3><blockquote>
+<p>通过wireshark抓到的[ACK, RST]响应报文中，有这样一个看起来很让人怀疑的提示<code>window size scaling factor: -1(unknown)</code></p>
+</blockquote>
+<p>It means that the trace file does not contain the TCP three-way handshake, so Wireshark does not know whether window scaling is in use, and if it is, what the window scaling factor is. If Wireshark sees the three-way handshake, and window scaling is used, Wireshark will know what window scaling factor is used by each side. Wireshark will then calculate the true window size for you by multiplying the value in the window size field by the appropriate multiplier.</p>
+<p>If Wireshark does not see the three-way handshake, it will simply report the value of the window size field, which may or may not be the true window size, and indicate “[window size scaling factor -1 (unknown)]”</p>
+<p>See RFC 1323 for the specification of the TCP window scale option.</p>
+</div></article></div></section><footer><div class="paginator"><a href="/2016/03/02/whats new in jdk8/" class="prev">上一篇</a><a href="/2016/02/04/Java单例模式/" class="next">下一篇</a></div><div class="copyright"><p>© 2015 - 2016 <a href="http://lpbobo.com">fish·nut</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p><p><span>友情链接</span>&#58;&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://blog.csdn.net/sum__mer">sum__mer </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://www.rudy-yuan.net">rudy-yuan </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://elvin.im">花花世界 </a></p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.6.1/MathJax.js?config=TeX-MML-AM_CHTML"></script></body></html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html><html lang="zh-cn"><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> Java开发WebService · Mi Tang</title><meta name="description" content="Java开发WebService - fish·nut"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="short icon" href="/favicon.png"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="http://lpbobo.com/atom.xml" title="Mi Tang"></head><body><header><a href="/" class="logo-link"><img src="/favicon.png"></a><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">HOME</a></li><li class="nav-list-item"><a href="/categories/Science" target="_self" class="nav-list-link">SCIENCE</a></li><li class="nav-list-item"><a href="/categories/Trip" target="_self" class="nav-list-link">TRIP</a></li><li class="nav-list-item"><a href="/About" target="_self" class="nav-list-link">WE</a></li></ul></header><div class="wrap"><section class="container"><div class="post"><article class="post-block"><h1 class="post-title">Java开发WebService</h1><div class="post-info">2015年11月20日</div><div class="post-content"><p>通过Java开发WebService服务，实现方式有两种SOAP与REST，其中SOAP是基于XML的RPC解决方案，而REST是一种软件架构风格，描述了访问资源的方式。</p>
+<a id="more"></a>
+<p><img src="http://7xlu9w.com1.z0.glb.clouddn.com/mitang_science_WebService.png" alt=""></p>
+<h2 id="导语："><a href="#导语：" class="headerlink" title="导语："></a>导语：</h2><blockquote>
+<p>Amazon是web服务的先驱，很早提出了web服务的概念，可以将亚马逊的数据和功能暴露给第三方的开发者.<br>Webservice是基于web的远程服务调用，可以用来构建分布式的网络系统，使得“本地”服务能够以接口的形式发布在网络上被其他应用访问，使网络透明化。    </p>
+</blockquote>
+<p>WebService是一种抽象的远程方法调用的解决方案，在此之前已经存在RPC、CORBA、DCOM、RMI等手段：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div></pre></td><td class="code"><pre><div class="line">* RPC（远程方法调用）</div><div class="line">* CORBA（公共对象请求代理体系结构）</div><div class="line">* DCOM（分布式组件对象模型）</div><div class="line">* Java RMI（Java远程方法调用）</div></pre></td></tr></table></figure>
+<p>WebService的特点包含以下几个方面：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">* 标准化：使用http，json，xml等标准的协议和数据格式</div><div class="line">* 语言透明：客户端、Web服务可以使用不同语言来编写，Web服务独立于硬件平台以及操作系统</div><div class="line">* 模块化设计：小的模块可以组合成大的模块，大的模块可以细分为更小的模块</div></pre></td></tr></table></figure>
+<p>那么，目前webservice有哪些实现形式呢？</p>
+<h2 id="1-SOAP"><a href="#1-SOAP" class="headerlink" title="1 SOAP"></a>1 SOAP</h2><blockquote>
+<p>Simple Object Access Protocol，即简单对象访问协议</p>
+</blockquote>
+<p>SOAP是一个开放协议，使用xml作为数据传输格式，使用http作为消息传输协议。</p>
+<p>基于SOAP的Web服务必须为客户端提供wsdl文档，由请求者根据WSDL来调用Web服务。</p>
+<blockquote>
+<p>WSDL: Web Services Description Language，即Web服务描述语言</p>
+</blockquote>
+<p><a href="http://staff.ustc.edu.cn/~shizhu/DotNet/WSDLxj.htm" target="_blank" rel="external">WSDL文件示例</a></p>
+<p>在本文中，通过实现同一个应用场景来展示不同Java WebService实现方式的特点。例子如下：</p>
+<p><strong>例子-需求描述</strong>：</p>
+<p>一个在线用户管理模块，负责用户信息的创建，修改，删除，查询。用户的信息主要包括：</p>
+<ul>
+<li>用户名（唯一ID）</li>
+<li>邮箱</li>
+<li>电话</li>
+</ul>
+<p><strong>例子-需求用例图</strong>:</p>
+<p><img src="http://www.ibm.com/developerworks/cn/webservices/0907_rest_soap/images/1.jpg" alt=""></p>
+<p><strong>例子-SOAP架构</strong></p>
+<p><img src="http://www.ibm.com/developerworks/cn/webservices/0907_rest_soap/images/3.jpg" alt=""></p>
+<p>所有的SOAP消息发送都使用HTTP POST方法，并且所有SOAP消息的URI都是相同的，这是基本特征。</p>
+<h3 id="SOAP客户端与服务端的实现"><a href="#SOAP客户端与服务端的实现" class="headerlink" title="SOAP客户端与服务端的实现"></a>SOAP客户端与服务端的实现</h3><h4 id="JAX-WS"><a href="#JAX-WS" class="headerlink" title="# JAX-WS"></a># JAX-WS</h4><blockquote>
+<p>Java API for XML Web Services</p>
+</blockquote>
+<p>JAX-WS可以作为开发基于SOAP或REST服务的API，提供基于注解的标准模型简化服务端与客户端开发，是JavaEE6之后的版本必需部分。</p>
+<p>JAX-WS的API主要提供两种注解：注解为@WebService的POJO类提供基于SOAP的服务，注解为@WebServiceProvider的POJO类通常提供一个REST式服务，但是也可以同时提供SOAP服务。</p>
+<p>JAX-WS的实现框架有以下几种：<strong><em>GlassFish Metro</em></strong>，<strong><em>Apache Axis2</em></strong>，<strong><em>Apache CXF</em></strong>。其中，GlassFish Metro是JAX-WS的参考实现，Axis2和CXF为替代实现方案。但是不论哪种具体的实现方式，本质上都是基本相同的，精通一种便可举一反三。</p>
+<h4 id="Metro"><a href="#Metro" class="headerlink" title="# Metro"></a># Metro</h4><p><em>代码示例1 Metro(@Version SOAP , Metro , Eclipse Kepler)</em></p>
+<h2 id="2-REST"><a href="#2-REST" class="headerlink" title="2 REST"></a>2 REST</h2><blockquote>
+<p>REpresentational State Transfer，即表征状态转移</p>
+</blockquote>
+<p>REST是一种软件架构风格，不是一个具体的协议规范，它可以用于分布式超媒体系统，也可以用于以文字、图形、音频和其他媒体格式存储在网络，并通过超链接互联的系统中。</p>
+<p>WWW不就是一个例子嘛？</p>
+<h3 id="REST架构把HTTP作为API"><a href="#REST架构把HTTP作为API" class="headerlink" title="REST架构把HTTP作为API"></a>REST架构把HTTP作为API</h3><p>REST式客户端通过指定以下两个内容来请求资源：</p>
+<ol>
+<li>URI</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">在REST架构中，通过HTTP请求的内容统称为资源，即**URI**。URI包含两个子类型：URL和URN，其中URL是指指定的一个位置，URN是一个资源的名称。通常，在文档书写时，我们将URI定义成WebService的接口。</div><div class="line"></div><div class="line">[新浪微博开放平台](http://open.weibo.com/wiki/%E5%BE%AE%E5%8D%9AAPI)提供的微博URI示例：</div><div class="line"></div><div class="line">https://api.weibo.com/statuses/public_timeline</div><div class="line">https://api/weibo.com/2/statuses/show</div><div class="line">https://upload.api.weibo.com/2/statuses/upload</div></pre></td></tr></table></figure>
+<ol>
+<li>指定HTTP的动作（CRUD）</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">在URI的基础上，指定http请求的动作，如创建(POST)，读取(READ)，更新(UPDATE)，删除(DELETE)及参数,便可访问web资源，而请求结果包含在http响应中，包含MIME类型的资源和响应代码。</div></pre></td></tr></table></figure>
+<p>一个REST式客户端请求资源的过程示例如下：</p>
+<p><img src="http://7xlu9w.com1.z0.glb.clouddn.com/mitang_science_JavaWebservice.jpg" alt=""></p>
+<h3 id="发布WebService"><a href="#发布WebService" class="headerlink" title="发布WebService"></a>发布WebService</h3><h4 id="通过HttpServlet实现REST-WebService"><a href="#通过HttpServlet实现REST-WebService" class="headerlink" title="# 通过HttpServlet实现REST WebService"></a># 通过HttpServlet实现REST WebService</h4><blockquote>
+<p><strong><a href="https://tomcat.apache.org/tomcat-5.5-doc/servletapi/javax/servlet/http/HttpServlet.html" target="_blank" rel="external">HttpServlet</a></strong></p>
+<p>HttpServlet扩展了GenericServlet类，从而实现了Servlet接口，被包含在Web容器提供的servlet-api.jar包中。</p>
+<p>Servlet接口声明了5种方法，其中最重要的是Web容器在每次请求一个servlet时调用的service方法。service方法的参数包含一个ServletRequest和ServletResponse，分别包含客户的请求信息及应答信息。</p>
+<p>HttpServlet重载了service方法，并提供特定的HTTP实现，其service方法包含的参数为HttpServletRequest和HttpServletResponse。</p>
+<p>HttpServlet还具有与CRUD匹配的doGet, doPost, doPut, doDelete方法，由service负责将客户的HTTP请求动作分配到对应的方法中。</p>
+</blockquote>
+<p>HttpServlet是实现REST式Web服务的重要方法，原因有以下两点：</p>
+<ol>
+<li>与HTTP请求相近，包含CRUD的动作及状态响应码</li>
+<li>在servlet容器中执行，容器充当了该servlet的应用程序代码与Web服务器之间的中间件，而Web容器可以提供很多通用服务，如：HTTPS传输，用户验证等</li>
+</ol>
+<h4 id="Web容器发布WebService"><a href="#Web容器发布WebService" class="headerlink" title="# Web容器发布WebService"></a># Web容器发布WebService</h4><p>Java中常用的Web服务器有以下几种：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">轻量化的Web服务器：</div><div class="line">	tomcat: servlet container</div><div class="line">	Jetty: servlet container</div><div class="line">	Resin: servlet container</div><div class="line">Java应用服务器：</div><div class="line">	GlassFish: EJB &amp; servlet container</div><div class="line">	JBoss: EJB container</div><div class="line">	WebLogic: servlet container(not free)</div><div class="line">	WebSphere: servlet container(not free)</div></pre></td></tr></table></figure>
+<h3 id="REST服务端的实现"><a href="#REST服务端的实现" class="headerlink" title="REST服务端的实现"></a>REST服务端的实现</h3><p>常见的四种API：</p>
+<ol>
+<li>HttpServlet及JSP</li>
+<li>JAX-RS</li>
+<li>Restlet</li>
+<li>JAX-WS @WebServiceProvider</li>
+</ol>
+<p><strong>例子-REST架构</strong>：</p>
+<p><img src="http://www.ibm.com/developerworks/cn/webservices/0907_rest_soap/images/2.jpg" alt=""></p>
+<p><strong>例子-REST API</strong>:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div></pre></td><td class="code"><pre><div class="line">GET /users            获取user列表</div><div class="line">GET /users/id         获取指定&#123;id&#125;的user</div><div class="line">GET /users/id/email   获取指定&#123;id&#125;的user的email信息</div><div class="line">POST /users           创建用户</div><div class="line">PUT /users/id/email   更新某个用户的email</div><div class="line">DELETE /users/id      删除指定&#123;id&#125;的用户</div><div class="line">注： endpoint是相对于统一URL的:URL/v1</div></pre></td></tr></table></figure>
+<h4 id="HttpServlet"><a href="#HttpServlet" class="headerlink" title="# HttpServlet"></a># HttpServlet</h4><p><em>代码示例2 HttpServlet(@Version Tomcat7.0.64, Eclipse Kepler)</em></p>
+<h4 id="JAX-RS"><a href="#JAX-RS" class="headerlink" title="# JAX-RS"></a># JAX-RS</h4><blockquote>
+<p>Java ApI for RESTful Web Services</p>
+</blockquote>
+<p>JAX-RS的API定义于<a href="https://jax-rs-spec.java.net/nonav/2.0-rev-a/apidocs/index.html" target="_blank" rel="external">java.ws.rs</a>包中，通过标注封装Web资源。标注包括：</p>
+<ul>
+<li>@Path</li>
+<li>@GET, @PUT, @POST, @DELETE</li>
+<li>@Produces</li>
+<li>@Consumes</li>
+<li>@PathParam, @QueryParam, @HeaderParam, @CookieParam, @MatrixParam,<br>@FormParam</li>
+</ul>
+<p>JAX-RS的具体实现由第三方提供，如参考实现<a href="https://jersey.java.net/" target="_blank" rel="external">Jersey</a>，Apache的<a href="https://cxf.apache.org/" target="_blank" rel="external">CXF</a>和<a href="https://wink.apache.org/" target="_blank" rel="external">Wink</a>，JBOSS的<a href="http://resteasy.jboss.org/" target="_blank" rel="external">RESTEasy</a>。</p>
+<p><em>代码示例3 Jersey(@Version Jersey2.14, Tomcat7.0.64, Eclipse Kepler)</em></p>
+<p><em>代码示例4 Jersey+Spring(@Version Jersey2.14, Spring4.1.4.Release, Tomcat7.0.64, Eclipse Kepler)</em></p>
+<h4 id="Jax-WS-WebServiceProvider"><a href="#Jax-WS-WebServiceProvider" class="headerlink" title="# Jax-WS @WebServiceProvider"></a># Jax-WS @WebServiceProvider</h4><p>JAX-WS API提供的@WebServiceProvider提供的API相较其他方式更为低层，更贴近http和xml。</p>
+<p><em>代码示例5 @WebServiceProvider(@Version Tomcat7.0.64, Eclipse Kepler)</em></p>
+<h3 id="如何设计Restful-API"><a href="#如何设计Restful-API" class="headerlink" title="如何设计Restful API"></a>如何设计Restful API</h3><p>API很重要！好的API设计可以减少沟通的工作量，文档的工作量。</p>
+<p>越容易使用的API，越会被使用。</p>
+<p>在API的基础上，可以将一个个的服务逐步构建成大的平台。</p>
+<p><a href="https://github.com/aisuhua/restful-api-design-references#fork-destination-box" target="_blank" rel="external">RESTful API Design</a>没有特定的规范要求，但一些设计者在经验的基础上提出了好的Restful API设计原则：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">- 抽象分离数据与业务逻辑：</div><div class="line">- 支持PUT,DELETE,POST,GET及PATCH动词</div><div class="line">- 包含版本信息</div><div class="line">- api子域</div><div class="line">- endpoint</div><div class="line">- 减少无谓的过滤器限制</div><div class="line">- 状态码</div><div class="line">- OAuth2.0授权协议</div><div class="line">- 内容类型</div></pre></td></tr></table></figure>
+<h3 id="REST-VS-SOAP"><a href="#REST-VS-SOAP" class="headerlink" title="REST VS SOAP"></a>REST VS SOAP</h3><p>在上文中，针对同一个应用场景，分别给出了基于SOAP和REST的实现，便于比较两种实现方式的特点。</p>
+<p>从以下几个方面比较：</p>
+<h4 id="接口抽象"><a href="#接口抽象" class="headerlink" title="# 接口抽象"></a># 接口抽象</h4><p>RESTful WebService使用标准的 HTTP 方法 (GET/PUT/POST/DELETE)来抽象服务请求动作，而SOAP通过定义自己个性化的接口方法来抽象 Web 服务，这更像RPC。</p>
+<p>RESTful WebService使用标准的HTTP API，结合其他的标准化技术，如 URI，HTML，XML 等，将会极大提高系统与系统之间整合的互操作能力。尤其在Web领域，RESTful WebService所表达的这种抽象能力更加贴近Web本身的工作方式，也更加自然。</p>
+<p>同时，使用标准HTTP方法实现的RRESTful WebService也带来了HTTP方法本身的一些优势：</p>
+<ul>
+<li><strong>无状态性（Stateless）</strong></li>
+</ul>
+<p>HTTP协议从本质上说是一种无状态的协议，客户端发出的 HTTP 请求之间可以相互隔离，不存在相互的状态依赖。基于HTTP的ROA，以非常自然的方式来实现无状态服务请求处理逻辑。对于分布式的应用而言，任意给定的两个服务请求Request 1与Request 2,由于它们之间并没有相互之间的状态依赖，就不需要对它们进行相互协作处理，其结果是：Request 1与 Request 2可以在任何的服务器上执行，这样的应用很容易在服务器端支持负载均衡(load-balance)。</p>
+<ul>
+<li><strong>安全操作与幂指相等（Safety/Idempotence）</strong></li>
+</ul>
+<p>HTTP的<code>GET</code>、<code>HEAD</code>请求本质上应该是安全的调用，即：这些调用不会有任何的副作用，不会造成服务器端状态的改变。对于服务器来说，客户端对某一URI做n次的GET、HAED调用，其状态与没有做调用是一样的，不会发生任何的改变。<br>HTTP的<code>PUT</code>、<code>DELTE</code>调用，具有幂指相等特性 , 即：客户端对某一 URI 做 n 次的 PUT、DELTE 调用，其效果与做一次的调用是一样的。HTTP 的 GET、HEAD 方法也具有幂指相等特性。<br>HTTP 这些标准方法在原则上保证你的分布式系统具有这些特性，以帮助构建更加健壮的分布式系统。</p>
+<h4 id="安全控制"><a href="#安全控制" class="headerlink" title="# 安全控制"></a># 安全控制</h4><p>为了说明问题，基于上面的在线用户管理系统，我们给定以下场景：<br>参考一开始我们给出的用例图，对于客户端 Client2，我们只希望它能以只读的方式访问 User 和 User List 资源，而 Client1 具有访问所有资源的所有权限。</p>
+<p>如何做这样的安全控制？</p>
+<p>通行的做法是：所有从客户端 Client2 发出的 HTTP 请求都经过代理服务器 (Proxy Server)。代理服务器制定安全策略：所有经过该代理的访问 User 和 User List 资源的请求只具有读取权限，即：允许 GET/HEAD 操作，而像具有写权限的 PUT/DELTE 是不被允许的。<br>如果对于 REST，我们看看这样的安全策略是如何部署的。如下图所示：</p>
+<p><img src="http://www.ibm.com/developerworks/cn/webservices/0907_rest_soap/images/4.jpg" alt=""></p>
+<p>一般代理服务器的实现根据 (URI, HTTP Method) 两元组来决定 HTTP 请求的安全合法性。<br>当发现类似于（<a href="http://localhost:8080/demo/v1/users/{id}，DELETE）这样的请求时，予以拒绝。" target="_blank" rel="external">http://localhost:8080/demo/v1/users/{id}，DELETE）这样的请求时，予以拒绝。</a><br>对于 SOAP，如果我们想借助于既有的代理服务器进行安全控制，会比较尴尬，如下图：</p>
+<p><img src="http://www.ibm.com/developerworks/cn/webservices/0907_rest_soap/images/5.jpg" alt=""></p>
+<p>所有的 SOAP 消息经过代理服务器，只能看到（<a href="http://localhost:8182/v1/soap/servlet/messagerouter" target="_blank" rel="external">http://localhost:8182/v1/soap/servlet/messagerouter</a>, HTTP POST）这样的信息，如果代理服务器想知道当前的 HTTP 请求具体做的是什么，必须对 SOAP 的消息体解码，这样的话，意味着要求第三方的代理服务器需要理解当前的 SOAP 消息语义，而这种 SOAP 应用与代理服务器之间的紧耦合关系是不合理的。</p>
+<h4 id="缓存"><a href="#缓存" class="headerlink" title="# 缓存"></a># 缓存</h4><p>众所周知，对于基于网络的分布式应用，网络传输是一个影响应用性能的重要因素。如何使用缓存来节省网络传输带来的开销，这是每一个构建分布式网络应用的开发人员必须考虑的问题。</p>
+<p>HTTP 协议带条件的 HTTP GET 请求 (Conditional GET) 被设计用来节省客户端与服务器之间网络传输带来的开销，这也给客户端实现 Cache 机制 ( 包括在客户端与服务器之间的任何代理 ) 提供了可能。HTTP 协议通过 HTTP HEADER 域：If-Modified-Since/Last- Modified，If-None-Match/ETag 实现带条件的 GET 请求。</p>
+<p>REST 的应用可以充分地挖掘 HTTP 协议对缓存支持的能力。当客户端第一次发送 HTTP GET 请求给服务器获得内容后，该内容可能被缓存服务器 (Cache Server) 缓存。当下一次客户端请求同样的资源时，缓存可以直接给出响应，而不需要请求远程的服务器获得。而这一切对客户端来说都是透明的。</p>
+<p><img src="http://www.ibm.com/developerworks/cn/webservices/0907_rest_soap/images/6.jpg" alt=""></p>
+<p>而对于 SOAP，情况又是怎样的呢？<br>使用 HTTP 协议的 SOAP，由于其设计原则上并不像 REST 那样强调与 Web 的工作方式相一致，所以，基于 SOAP 应用很难充分发挥 HTTP 本身的缓存能力。</p>
+<p><img src="http://www.ibm.com/developerworks/cn/webservices/0907_rest_soap/images/7.jpg" alt=""></p>
+<p>两个因素决定了基于 SOAP 应用的缓存机制要远比 REST 复杂：<br>其一、所有经过缓存服务器的 SOAP 消息总是 HTTP POST，缓存服务器如果不解码 SOAP 消息体，没法知道该 HTTP 请求是否是想从服务器获得数据。<br>其二、SOAP 消息所使用的 URI 总是指向 SOAP 的服务器，如本文例子中的 <a href="http://localhost:8080/demo/v1/soap/servlet/messageroute，这并没有表达真实的资源" target="_blank" rel="external">http://localhost:8080/demo/v1/soap/servlet/messageroute，这并没有表达真实的资源</a> URI，其结果是缓存服务器根本不知道那个资源正在被请求，更不用谈进行缓存处理。</p>
+<h4 id="连接性"><a href="#连接性" class="headerlink" title="# 连接性"></a># 连接性</h4><p>一个纯的 SOAP 应用中，URI 本质上除了用来指示 SOAP 服务器外，本身没有任何意义。与 REST 的不同的是，无法通过 URI 驱动 SOAP 方法调用。例如在我们的例子中，当我们通过<br>getUserList SOAP 消息获得所有的用户列表后，仍然无法通过既有的信息得到某个具体的用户信息。唯一的方法只有通过 WSDL 的指示，通过调用 getUserByName 获得，getUserList 与 getUserByName 是彼此孤立的。</p>
+<p>而对于 REST，情况是完全不同的：通过 <a href="http://localhost:8080/demo/v1/users" target="_blank" rel="external">http://localhost:8080/demo/v1/users</a> URI 获得用户列表，然后再通过用户列表中所提供的 LINK 属性，例如 <link><a href="http://localhost:8080/demo/v1/users/1获得&quot;1“用户的用户信息。这样的工作方式，非常类似于在浏览器的某个页面上点击某个" target="_blank" rel="external">http://localhost:8080/demo/v1/users/1获得&quot;1“用户的用户信息。这样的工作方式，非常类似于在浏览器的某个页面上点击某个</a> hyperlink, 浏览器帮你自动定向到你想访问的页面，并不依赖任何第三方的信息。</p>
+<h4 id="SOAP的优势？"><a href="#SOAP的优势？" class="headerlink" title="# SOAP的优势？"></a># SOAP的优势？</h4><p>类似XMPP，可以支持任何标准的传输协议，不仅仅是Http/Https。</p>
+<p>SOAP是一个标准协议，具备良好的协议规范，比较成熟，而REST是一套架构，没有标准规范，SOAP往往被用在大型企业和网络架构中。</p>
+<p>支持WS-Security，增加了一些企业级的安全控制功能。</p>
+<p>支持WS-AtomicTransaction，支持ACID事务操作。</p>
+<p>支持WS-ReliableMessaging，支持可信通信。</p>
+<p><strong>总结起来</strong>，</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">REST以资源为中心，适用场景包括：有限的带宽和资源，完全无状态操作，缓存，多种类型的数据格式。</div><div class="line"></div><div class="line">SOAP以操作为中心，适用于REST不适用的场景，包括：异步处理与调用，形式化契约，有状态的操作。</div></pre></td></tr></table></figure>
+<p>目前，WEB中REST已经基本取代了SOAP。</p>
+<h2 id="webservice接口安全"><a href="#webservice接口安全" class="headerlink" title="webservice接口安全"></a>webservice接口安全</h2><p>基于WSDL的SOAP协议支持WS-Security安全规范进行认证、授权、身份管理。</p>
+<p>RESTful Webservice呢？</p>
+<p>主要在以下几个方面：</p>
+<ol>
+<li>线路层的安全性</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div></pre></td><td class="code"><pre><div class="line">+ 客户端与服务端在传输层确保不与冒名顶替者通信</div><div class="line">+ 传输数据要加密，不能够被拦截器解密</div><div class="line">+ 保证发送端与接收端的消息一致</div><div class="line"></div><div class="line">解决方案：HTTPS</div></pre></td></tr></table></figure>
+<ol>
+<li>用户身份认证和授权<pre><code>+ 用户认证，用户向服务端提供凭据信息
++ 角色授权，授权不用用户角色的资源访问范围
+</code></pre></li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">示例：OAuth2.0</div></pre></td></tr></table></figure>
+<h2 id="结语"><a href="#结语" class="headerlink" title="结语"></a>结语</h2><p>通过Webservice可以很方便得构建出一个Web服务接口层的框架，但如何使用框架并不是我们最关心的要点。我们的注意力应该集中在如何设计更好的API，如何抽象自己的服务，如何更深刻地理解HTTP，如何做更好的分布式网络架构。</p>
+<h1 id="附录"><a href="#附录" class="headerlink" title="附录"></a>附录</h1><hr>
+<h2 id="xml与json"><a href="#xml与json" class="headerlink" title="xml与json"></a>xml与json</h2><p>中国部分省市数据举例：</p>
+<figure class="highlight xml"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div><div class="line">22</div><div class="line">23</div><div class="line">24</div><div class="line">25</div><div class="line">26</div><div class="line">27</div><div class="line">28</div><div class="line">29</div><div class="line">30</div><div class="line">31</div><div class="line">32</div><div class="line">33</div></pre></td><td class="code"><pre><div class="line">**XML**:</div><div class="line">&lt;?xml version="1.0" encoding="utf-8" ?&gt;</div><div class="line"><span class="tag">&lt;<span class="name">country</span>&gt;</span></div><div class="line"> 	<span class="tag">&lt;<span class="name">name</span>&gt;</span>中国<span class="tag">&lt;/<span class="name">name</span>&gt;</span></div><div class="line"> 	<span class="tag">&lt;<span class="name">province</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;<span class="name">name</span>&gt;</span>黑龙江<span class="tag">&lt;/<span class="name">name</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;<span class="name">citys</span>&gt;</span></div><div class="line">   		<span class="tag">&lt;<span class="name">city</span>&gt;</span>哈尔滨<span class="tag">&lt;/<span class="name">city</span>&gt;</span></div><div class="line">   		<span class="tag">&lt;<span class="name">city</span>&gt;</span>大庆<span class="tag">&lt;/<span class="name">city</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;/<span class="name">citys</span>&gt;</span>  　　</div><div class="line"> 	<span class="tag">&lt;/<span class="name">province</span>&gt;</span></div><div class="line"> 	<span class="tag">&lt;<span class="name">province</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;<span class="name">name</span>&gt;</span>广东<span class="tag">&lt;/<span class="name">name</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;<span class="name">citys</span>&gt;</span></div><div class="line">     		<span class="tag">&lt;<span class="name">city</span>&gt;</span>广州<span class="tag">&lt;/<span class="name">city</span>&gt;</span></div><div class="line">     		<span class="tag">&lt;<span class="name">city</span>&gt;</span>深圳<span class="tag">&lt;/<span class="name">city</span>&gt;</span></div><div class="line">     		<span class="tag">&lt;<span class="name">city</span>&gt;</span>珠海<span class="tag">&lt;/<span class="name">city</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;/<span class="name">citys</span>&gt;</span> 　　</div><div class="line"> 	<span class="tag">&lt;/<span class="name">province</span>&gt;</span></div><div class="line"> 	<span class="tag">&lt;<span class="name">province</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;<span class="name">name</span>&gt;</span>台湾<span class="tag">&lt;/<span class="name">name</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;<span class="name">citys</span>&gt;</span></div><div class="line">     　		<span class="tag">&lt;<span class="name">city</span>&gt;</span>台北<span class="tag">&lt;/<span class="name">city</span>&gt;</span></div><div class="line">      　<span class="tag">&lt;<span class="name">city</span>&gt;</span>高雄<span class="tag">&lt;/<span class="name">city</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;/<span class="name">citys</span>&gt;</span>　</div><div class="line"> 	<span class="tag">&lt;/<span class="name">province</span>&gt;</span></div><div class="line"> 	<span class="tag">&lt;<span class="name">province</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;<span class="name">name</span>&gt;</span>新疆<span class="tag">&lt;/<span class="name">name</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;<span class="name">citys</span>&gt;</span></div><div class="line">     		<span class="tag">&lt;<span class="name">city</span>&gt;</span>乌鲁木齐<span class="tag">&lt;/<span class="name">city</span>&gt;</span></div><div class="line">   	<span class="tag">&lt;/<span class="name">citys</span>&gt;</span></div><div class="line"> 	<span class="tag">&lt;/<span class="name">province</span>&gt;</span></div><div class="line"><span class="tag">&lt;/<span class="name">country</span>&gt;</span></div></pre></td></tr></table></figure>
+<figure class="highlight"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line">**JSON**:</div><div class="line">&#123;</div><div class="line">   	name: "中国",</div><div class="line">       provinces: [</div><div class="line">           &#123; name: "黑龙江", citys: &#123; city: ["哈尔滨", "大庆"]&#125; &#125;,</div><div class="line">           &#123; name: "广东", citys: &#123; city: ["广州", "深圳", "珠海"]&#125; &#125;,</div><div class="line">           &#123; name: "台湾", citys: &#123; city: ["台北", "高雄"]&#125; &#125;,</div><div class="line">           &#123; name: "新疆", citys: &#123; city: ["乌鲁木齐"]&#125; &#125;</div><div class="line">           ]</div><div class="line">  	&#125;</div></pre></td></tr></table></figure>
+<ul>
+<li>json更适合机器阅读，Web应用广泛，轻量，清晰，冗余少</li>
+<li>xml更适合人阅读，可读性更强，大型应用的配置文件</li>
+</ul>
+<h2 id="maven"><a href="#maven" class="headerlink" title="maven"></a>maven</h2><p>@Version  maven3.2.5</p>
+<ol>
+<li><strong>基本功能</strong>：</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">自动化构建 + 依赖管理 + 项目信息管理</div></pre></td></tr></table></figure>
+<ol>
+<li><strong>POM.xml</strong>：</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">通过&lt;groupId&gt;, &lt;artifactId&gt;, &lt;packaging&gt;, &lt;version&gt;标签唯一确定一个项目，也称作maven坐标</div></pre></td></tr></table></figure>
+<ol>
+<li><strong>常用命令</strong>：</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">mvn archetype:generate -DgroupId=  -DartifactId=  -DarchetypeArtifactId=</div><div class="line"></div><div class="line">mvn clean, install, compile</div><div class="line">	</div><div class="line">mvn package</div><div class="line"></div><div class="line">mvn eclipse:eclipse</div><div class="line"></div><div class="line">mvn eclipse:clean</div></pre></td></tr></table></figure>
+<ol>
+<li><strong>仓库</strong>：</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">local：本地文件路径./m2</div><div class="line">	</div><div class="line">central：maven repository(http://mvnrepository.com/)</div></pre></td></tr></table></figure>
+<ol>
+<li><strong>标准的目录结构</strong>:</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div></pre></td><td class="code"><pre><div class="line">project</div><div class="line">	</div><div class="line">|--pom.xml</div><div class="line">	</div><div class="line">|--src/main/java</div><div class="line">	</div><div class="line">|--src/main/resource</div><div class="line"></div><div class="line">|--src/test/java</div><div class="line"></div><div class="line">|--src/test/resource</div></pre></td></tr></table></figure>
+<ol>
+<li><strong>常见问题</strong>:<ul>
+<li>dynamic web project 与 maven工程转换</li>
+<li>缺少maven library</li>
+<li>maven与eclipse的关系</li>
+</ul>
+</li>
+</ol>
+<p><img src="http://7xlu9w.com1.z0.glb.clouddn.com/mitang_science_maven&amp;eclipse.jpg" alt=""></p>
+<h2 id="tomcat-glassfish等servlet容器"><a href="#tomcat-glassfish等servlet容器" class="headerlink" title="tomcat, glassfish等servlet容器"></a>tomcat, glassfish等servlet容器</h2><p>三篇参考博文：</p>
+<ul>
+<li><a href="http://www.ibm.com/developerworks/cn/java/j-lo-servlet/" target="_blank" rel="external">Servlet工作原理解析</a></li>
+<li><a href="http://www.ibm.com/developerworks/cn/java/j-lo-tomcat1/index.html" target="_blank" rel="external">Tomcat系统架构与设计模式（1）</a></li>
+<li><a href="http://www.ibm.com/developerworks/cn/java/j-lo-tomcat2/" target="_blank" rel="external">Tomcat系统架构与设计模式（2）</a></li>
+</ul>
+<h2 id="参考内容"><a href="#参考内容" class="headerlink" title="参考内容"></a>参考内容</h2><ol>
+<li><a href="http://www.ibm.com/developerworks/cn/webservices/0907_rest_soap/" target="_blank" rel="external">Web服务编程，REST与SOAP</a></li>
+<li>Java Web服务构建与运行(第2版)</li>
+<li><a href="http://spf13.com/post/soap-vs-rest" target="_blank" rel="external">REST VS SOAP</a></li>
+</ol>
+</div></article></div></section><footer><div class="paginator"><a href="/2015/11/23/https/" class="prev">上一篇</a><a href="/2015/11/03/Xmpp &amp; Bosh (3)/" class="next">下一篇</a></div><div class="copyright"><p>© 2015 - 2016 <a href="http://lpbobo.com">fish·nut</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p><p><span>友情链接</span>&#58;&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://blog.csdn.net/sum__mer">sum__mer </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://www.rudy-yuan.net">rudy-yuan </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://elvin.im">花花世界 </a></p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.6.1/MathJax.js?config=TeX-MML-AM_CHTML"></script></body></html>

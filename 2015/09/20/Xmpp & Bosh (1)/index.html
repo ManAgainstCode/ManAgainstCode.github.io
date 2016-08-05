@@ -1,0 +1,89 @@
+<!DOCTYPE html><html lang="zh-cn"><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> XMPP & BOSH (1) · Mi Tang</title><meta name="description" content="XMPP &amp; BOSH (1) - fish·nut"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="short icon" href="/favicon.png"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="http://lpbobo.com/atom.xml" title="Mi Tang"></head><body><header><a href="/" class="logo-link"><img src="/favicon.png"></a><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">HOME</a></li><li class="nav-list-item"><a href="/categories/Science" target="_self" class="nav-list-link">SCIENCE</a></li><li class="nav-list-item"><a href="/categories/Trip" target="_self" class="nav-list-link">TRIP</a></li><li class="nav-list-item"><a href="/About" target="_self" class="nav-list-link">WE</a></li></ul></header><div class="wrap"><section class="container"><div class="post"><article class="post-block"><h1 class="post-title">XMPP & BOSH (1)</h1><div class="post-info">2015年9月20日</div><div class="post-content"><p>XMPP is the Extensible Messaging and Presence Protocol, a set of open technologies for instant messaging, presence, mulity-party chat, voice and video calls, collaboration, lightweight middleware, content syndication, and generalized routing of XML data.</p>
+<a id="more"></a>
+<p><img src="http://7xlu9w.com1.z0.glb.clouddn.com/mitang_science_XMPP.png" alt=""><br>近期在做一个呼叫中心项目，需要通过平台的BOSH服务器开发即时通讯功能，连接Agent与Client。其中，Agent是构建在java服务器上的web坐席，而Client是swift实现的IOS客户端。Agent可以调用平台封装的xmpp js库，客户端需要自己实现功能。</p>
+<p>本着不局限于集成开发的态度，督促自己深入了解了xmpp相关的知识，同时也因为一直想做社交IM相关的产品，就认真研究了xmpp协议。</p>
+<p>参考<a href="xmpp.org"><em>xmpp官网</em></a>，熟悉协议；参考Blog资源，整理思路；参考两本书籍：《<em>Xmpp - The Definitive Guide</em>》和《<em>Professional Xmpp Programming with Javascript and Jquey</em>》，补充内容，最终成文。</p>
+<h2 id="XMPP"><a href="#XMPP" class="headerlink" title="XMPP"></a>XMPP</h2><p>官方定义：</p>
+<blockquote>
+<p>XMPP is the Extensible Messaging and Presence Protocol, a set of open technologies for instant messaging, presence, mulity-party chat, voice and video calls, collaboration, lightweight middleware, content syndication, and generalized routing of XML data.</p>
+<p>The Extensible Messaging and Presence Protocol(XMPP) is an application of the Extensible Markup Language(XML) that enables the near-real-time exchange of structured yet extensible data between two or more network entities.(RFC 6120)</p>
+</blockquote>
+<p>xmpp定义了在两个或多个通讯实体之间传递小型的结构化数据所采用的协议，在此基础上可以用来构建大规模即时通信系统、协作系统以及语音和视频会议。</p>
+<p>xmpp交换的数据格式为xml，通用，便于扩展。</p>
+<h3 id="发展历史"><a href="#发展历史" class="headerlink" title="发展历史"></a>发展历史</h3><p>xmpp的前身是诞生于1999年的jabber。类似于很多开放的协议，在此之前是群雄混战的时代，各家自扫门前雪。很多公司开发的IM应用程序绑定各自的协议和网络，这使得第三方开发人员集成不同的应用代价很高。</p>
+<p>开放、去中心化的IM网络和协议促使了jabber的出现。</p>
+<p>伴随着jabber社区的健壮，jabber不断吸收新的想法，衍生出多种多样的客户端实现，在2000年得以稳定，并被正式发布。</p>
+<p>Jabber Software Foundation于2001年成立，并在2002年向IETF标准化进程提交了核心协议。IETF在2004年的RFC3920与RFC3921中发布了XMPP协议，并在之后陆续发布了XEP(xmpp extension proposal)扩展协议（<a href="http://xmpp.org/about-xmpp/history/" target="_blank" rel="external"><em>官方链接</em></a>）。</p>
+<h3 id="特点"><a href="#特点" class="headerlink" title="特点"></a>特点</h3><p>xmpp协议的优点主要在以下几个方面：</p>
+<ul>
+<li>open: 开放，xmpp协议是免费的，公开的，社区资源很丰富</li>
+<li>Standard: 标准，由IETF标准化过程正式发布</li>
+<li>Proven: 实用，Google Talk等大型应用由此构建    </li>
+<li>Decentralized: 去中心化，类似email，支持server2server，面向客户本身，而非面向资源（关于去中心化，可以参考<a href="http://www.zhihu.com/question/19744551" target="_blank" rel="external"><em>英雄帖</em></a>） </li>
+<li>Secure: 安全，内置TLS以及SASL加密</li>
+<li>Extensible: 易扩展，xml显神威</li>
+<li>Flexible: 灵活，支持的应用场景丰富 </li>
+<li>Diverse: 多样，后宫强大</li>
+</ul>
+<h2 id="核心"><a href="#核心" class="headerlink" title="核心"></a>核心</h2><blockquote>
+<p>RFC6120: The purpose of XMPP is to enable the exchange “XML stanzas” over a network between two or more entities.</p>
+</blockquote>
+<p>xmpp协议的核心技术包括以下几点：XML数据流层，TLS加密传输，SASL安全验证，utf-8编码，状态描述，状态订阅，花名册管理。</p>
+<p>一个完整的xmpp连接生命周期包括以下几个部分：</p>
+<p><strong>Client-Server架构</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">1. 解析服务端的地址及端口</div><div class="line">2. 与服务端建立TCP连接</div><div class="line">3. xml流初始化</div><div class="line">4. TLS信道加密</div><div class="line">5. SASL授权</div><div class="line">6. XML流绑定本地资源</div><div class="line">7. 开始数据交换</div><div class="line">8. 关闭XML流</div><div class="line">9. 关闭TCP</div></pre></td></tr></table></figure>
+<p><strong>Server-Server架构</strong></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div></pre></td><td class="code"><pre><div class="line">1. 解析服务端的地址及端口</div><div class="line">2. 建立TCP连接</div><div class="line">3. xml流初始化</div><div class="line">4. TLS信道加密</div><div class="line">5. SASL授权</div><div class="line">6. 直接开始数据交换，或者作为代理进行</div><div class="line">7. 关闭XML流</div><div class="line">8. 关闭TCP</div></pre></td></tr></table></figure>
+<h3 id="JID"><a href="#JID" class="headerlink" title="JID"></a>JID</h3><p>  任何的xmpp实体都会在网络上注册一个名字，俗称JID，格式为：localpart@domainpart/resourcepart，可以通过DNS解析。</p>
+<p>  其中：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">domainpart -&gt; Server address: 形如im.example.com</div><div class="line">   localpart -&gt; Server Account Address: 形如host@im.example.com</div><div class="line">resourcepart -&gt; Resource Address: 形如host@im.example.com/resource</div></pre></td></tr></table></figure></p>
+<p>  逻辑上来说，xmpp实体在网络上的对应关系为peer-to-peer，实际来说，是client-to-server-to-server-to-client的关系。</p>
+<p>  注意，对于同一个client，resource name不同，就可以建立多个连接。</p>
+<h3 id="TCP连接"><a href="#TCP连接" class="headerlink" title="TCP连接"></a>TCP连接</h3><h4 id="限制"><a href="#限制" class="headerlink" title="限制"></a>限制</h4><p>client与server需要建立tcp长连接。</p>
+<p>在XEP中规定了xml流可以不绑定在tcp协议上，也可以绑定在如http协议上。</p>
+<h4 id="域名解析"><a href="#域名解析" class="headerlink" title="域名解析"></a>域名解析</h4><p>方法：DNS-SRV</p>
+<h4 id="重连策略："><a href="#重连策略：" class="headerlink" title="重连策略："></a>重连策略：</h4><ol>
+<li>重连超时时间设置为0-60s</li>
+<li>在连续的重连过程中，不断增长尝试的间隔</li>
+<li>建议使用TLS session resumption进行重连</li>
+</ol>
+<h4 id="可靠性："><a href="#可靠性：" class="headerlink" title="可靠性："></a>可靠性：</h4><p>XEP-0198中解决了如何解决tcp长连接可靠性的问题</p>
+<h3 id="XML流"><a href="#XML流" class="headerlink" title="XML流"></a>XML流</h3><h4 id="基础"><a href="#基础" class="headerlink" title="基础"></a>基础</h4><p>XML Stream表示数据交换的容器，声明周期在<stream></stream>中。</p>
+<p>XML Stanza是一级节点，包括：message，presence，iq(Info/Query)。<br>节点的namespace属性值：jabber:client 或者 jabber: server。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div></pre></td><td class="code"><pre><div class="line">&lt;message&gt;: a &quot;push&quot; mechanism for generalized messaging;</div><div class="line">&lt;presence&gt;: a specialized &quot;publish-subscribe&quot; mechanism for broadcasting information about network availability</div><div class="line">&lt;iq&gt;: a &quot;request-response&quot; mechanism for more structured exchange of data.</div></pre></td></tr></table></figure>
+<p>####　过程</p>
+<ol>
+<li>交换stream头</li>
+</ol>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div></pre></td><td class="code"><pre><div class="line">请求: </div><div class="line">&lt;xml version=&apos;1.0&apos;?&gt;</div><div class="line">&lt;stream:stream</div><div class="line">	from=&apos;juliet@im.example.com&apos;</div><div class="line">	to=&apos;im.example.com&apos;</div><div class="line">	version=&apos;1.0&apos;</div><div class="line">	xml:lang=&apos;en&apos;</div><div class="line">	xmlns=&apos;jabber:client&apos;</div><div class="line">	xmlns:stream=&apos;http://etherx.jabber.org/streams&apos;&gt;</div><div class="line"></div><div class="line">应答:</div><div class="line">&lt;xml version=&apos;1.0&apos;&gt;</div><div class="line">&lt;stream:stream</div><div class="line">	from=&apos;im.example.com&apos;</div><div class="line">	id=&apos;++TR84Sm6A3hnt3Q065SnAbbk3Y=&apos;</div><div class="line">	to=&apos;juliet@im.example.com&apos;</div><div class="line">	version=&apos;1.0&apos;</div><div class="line">	xml:lang=&apos;en&apos;</div><div class="line">	xmlns=&apos;jabber:client&apos;</div><div class="line">	xmlns:stream=&apos;http://etherx.jabber.org/streams&apos;&gt;</div></pre></td></tr></table></figure>
+<ol>
+<li><p>stream negotiation</p>
+<p> 就是服务端向客户端声明面试过程（tls，sasl..），而且面试过程是有先后顺序的，面试题目包裹在&lt;    stream:features&gt;节点下。</p>
+</li>
+<li><p>closing a stream</p>
+<p> xml流可以随时被关闭，形式为：</p>
+</li>
+<li><p>directionality</p>
+<p> 不同的使用情况下可以在同一个tcp连接上建立不同数量的xml流</p>
+</li>
+<li><p>handling of silent peers</p>
+<p> 异常处理的情况：tcp失效，xml流堵塞，对端空闲</p>
+</li>
+<li><p>use of checking methods</p>
+<p> 建议根据实际网络环境确定检查连接的时间间隔，推荐至少5分钟</p>
+</li>
+<li><p>stream attributes</p>
+<p> ‘from’:发送方的JID<br> ‘to’:接收方的JID<br> ‘id’:当前流的唯一标示符，server端必须在开始时包含<br> ‘xml:lang’:默认语言<br> ‘version’:标识协议版本，1.0+</p>
+</li>
+<li><p>xml namespaces</p>
+<p> 约束命名空间</p>
+</li>
+<li><p>stream errors</p>
+<p> 参考协议内容，寻找错误原因</p>
+</li>
+</ol>
+<h3 id="STARTTLS-Negotiation"><a href="#STARTTLS-Negotiation" class="headerlink" title="STARTTLS Negotiation"></a>STARTTLS Negotiation</h3><p>该协议是TLS协议的扩展协议，主要防止链路被干扰、监听。</p>
+<h3 id="SASL-Negotiation"><a href="#SASL-Negotiation" class="headerlink" title="SASL Negotiation"></a>SASL Negotiation</h3><p>简单验证安全层，为基于连接的协议增加认证能力。xmpp提供的xml命名空间描述遵守sasl的描述规范。</p>
+<h3 id="Resource-Binding"><a href="#Resource-Binding" class="headerlink" title="Resource Binding"></a>Resource Binding</h3><p>在JID中有一项就是resource，是同一用户多处同时登陆的基础。在每次建立连接后，都是在某一resource上进行通信。</p>
+<p>xmpp RFC6120一共描述了16章节的内容，上文只简单概括了前7章的大致内容，至此client与server端可以开始进行数据交换，后续的主要是对xml stanza的具体处理。这里面的内容太多了，而且没有代码说起来不是在，还是在遇到问题的时候，开发过程中逐渐熟悉吧。</p>
+<p>单纯地阅读协议还是无法感受到xmpp是如何发展起来的，我在xmpp系列的第七篇博客里再横向比较吧。</p>
+</div></article></div></section><footer><div class="paginator"><a href="/2015/09/21/Xmpp &amp; Bosh (2)/" class="prev">上一篇</a><a href="/2015/09/16/trip/" class="next">下一篇</a></div><div class="copyright"><p>© 2015 - 2016 <a href="http://lpbobo.com">fish·nut</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p><p><span>友情链接</span>&#58;&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://blog.csdn.net/sum__mer">sum__mer </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://www.rudy-yuan.net">rudy-yuan </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://elvin.im">花花世界 </a></p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.6.1/MathJax.js?config=TeX-MML-AM_CHTML"></script></body></html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html><html lang="zh-cn"><head><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><title> XMPP & BOSH (2) · Mi Tang</title><meta name="description" content="XMPP &amp; BOSH (2) - fish·nut"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="short icon" href="/favicon.png"><link rel="stylesheet" href="/css/apollo.css"><link rel="search" type="application/opensearchdescription+xml" href="http://lpbobo.com/atom.xml" title="Mi Tang"></head><body><header><a href="/" class="logo-link"><img src="/favicon.png"></a><ul class="nav nav-list"><li class="nav-list-item"><a href="/" target="_self" class="nav-list-link">HOME</a></li><li class="nav-list-item"><a href="/categories/Science" target="_self" class="nav-list-link">SCIENCE</a></li><li class="nav-list-item"><a href="/categories/Trip" target="_self" class="nav-list-link">TRIP</a></li><li class="nav-list-item"><a href="/About" target="_self" class="nav-list-link">WE</a></li></ul></header><div class="wrap"><section class="container"><div class="post"><article class="post-block"><h1 class="post-title">XMPP & BOSH (2)</h1><div class="post-info">2015年9月21日</div><div class="post-content"><p>BOSH: Bidirectional-streaming over synchronous HTTP</p>
+<a id="more"></a>
+<p><img src="http://7xlu9w.com1.z0.glb.clouddn.com/mitang_science_XMPP.png" alt=""></p>
+<h2 id="BOSH"><a href="#BOSH" class="headerlink" title="BOSH"></a>BOSH</h2><blockquote>
+<p><em>Bidirectional-streaming over synchronous HTTP</em></p>
+</blockquote>
+<p>BOSH是一种通过HTTP模拟实现端与端之间TCP长连接的技术，简单说就是建立两个网络实体间的双向HTTP长连接。<br>与基于HTTP的双向连接技术，包括comet，ajax轮询以及websocket相比较，BOSH是一种较早的实现，而且具有高效、低延迟的优势，能够适应具有较高实时性要求的应用。</p>
+<p>BOSH是在<a href="http://www.xmpp.org/extensions/xep-0124.html" target="_blank" rel="external">XEP-0124扩展协议</a>中被制订。</p>
+<p>BOSH的设计能够满足以下几点应用的要求：</p>
+<ol>
+<li>能够在受限的环境下，如移动设备、浏览器中运行；</li>
+<li>兼容缓存部分HTTP应答的代理；</li>
+<li>能够快速通过有HTTP应答时间限制的代理；</li>
+<li>兼容HTTP/1.0；（comet不支持）</li>
+<li>兼容受限的网络连接，如防火墙，代理，网管；</li>
+<li>容错；</li>
+<li>可扩展；</li>
+<li>更小的带宽占用；</li>
+<li>更快的响应速度；</li>
+<li>支持轮询；</li>
+<li>顺序提交数据；</li>
+<li>防止非法的HTTP插入请求；</li>
+<li>防止拒绝服务攻击；</li>
+<li>多路复用的数据流；</li>
+</ol>
+<h3 id="设计架构"><a href="#设计架构" class="headerlink" title="设计架构"></a>设计架构</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div></pre></td><td class="code"><pre><div class="line">Server</div><div class="line">  |</div><div class="line">  |    [unwrapped data streams]</div><div class="line">  |</div><div class="line">HTTP CM</div><div class="line">  |</div><div class="line">  |    [HTTP + &lt;body/&gt; wrapper]</div><div class="line">  |</div><div class="line">Client</div></pre></td></tr></table></figure>
+<p>参考<a href="http://shallon.iteye.com/blog/126428" target="_blank" rel="external">博文</a>,在BOSH的设计框架中，HTTP连接管理器（CM）与Server之间是原始的数据流，而客户端与CM之间的是包裹在body节点下的HTTP数据流。</p>
+<h3 id="实现方式"><a href="#实现方式" class="headerlink" title="实现方式"></a>实现方式</h3><p>当客户端发送一个请求时，连接管理器不马上应答，而是保持当前的连接直到有数据可以返回。当客户端收到返回时，继续发送新的请求。</p>
+<p>如果连接管理器保持当前的连接超时了，就会回给客户端一个空的body，出发客户端新的请求，这样可以保持连接激活，以免被中断，同时也可以检查连接状态。</p>
+<p>当客户端与连接管理器支持持续连接时（如HTTP/1.0中的”Connection: keep-alive”，或者HTTP/1.1的默认项)，不会重新建立socket，减少花销。</p>
+<p>当客户在等待一个请求应答时，想发送新的请求，若不支持pipeline，会与连接管理器建立新的连接。此时，连接管理器会立刻返回上个请求的应答，保持当前的请求。</p>
+<h2 id="XMPP-Over-BOSH"><a href="#XMPP-Over-BOSH" class="headerlink" title="XMPP Over BOSH"></a>XMPP Over BOSH</h2><p>那么XMPP是如何利用BOSH来传输XML流的呢？</p>
+<p>答案是HTTP绑定。</p>
+<p><a href="http://www.xmpp.org/extensions/xep-0206.html" target="_blank" rel="external">XEP-0206</a>在BOSH协议的基础上制定了XMPP相关的接口，从而在一些tcp连接不适用的情况下（如手机上），可以通过BOSH实现实时通讯。</p>
+</div></article></div></section><footer><div class="paginator"><a href="/2015/10/31/Israel Vally/" class="prev">上一篇</a><a href="/2015/09/20/Xmpp &amp; Bosh (1)/" class="next">下一篇</a></div><div class="copyright"><p>© 2015 - 2016 <a href="http://lpbobo.com">fish·nut</a>, powered by <a href="https://hexo.io/" target="_blank">Hexo</a> and <a href="https://github.com/pinggod/hexo-theme-apollo" target="_blank">hexo-theme-apollo</a>.</p><p><span>友情链接</span>&#58;&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://blog.csdn.net/sum__mer">sum__mer </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://www.rudy-yuan.net">rudy-yuan </a>&nbsp;&nbsp;&nbsp;&nbsp;&bull;&nbsp;<a href="http://elvin.im">花花世界 </a></p></div></footer></div><script async src="//cdn.bootcss.com/mathjax/2.6.1/MathJax.js?config=TeX-MML-AM_CHTML"></script></body></html>
